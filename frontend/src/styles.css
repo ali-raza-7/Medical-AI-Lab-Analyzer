@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  .dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-[#020617] text-[#f1f5f9] antialiased selection:bg-[#14b8a6]/30;
+    min-height: 100vh;
+  }
+  body::-webkit-scrollbar {
+    width: 6px;
+  }
+  body::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  body::-webkit-scrollbar-thumb {
+    background: #1e293b;
+    border-radius: 9999px;
+  }
+  body::-webkit-scrollbar-thumb:hover {
+    background: #334155;
+  }
+}
+
+@layer utilities {
+  .clinical-gradient {
+    @apply bg-gradient-to-br from-[#0f172a] to-[#020617];
+  }
+  .clinical-border {
+    @apply border-[#1e293b];
+  }
+}
+
