@@ -1,6 +1,52 @@
-.env
+# Python
 __pycache__/
 *.pyc
+*.pyo
+.Python
+
+# Virtual environments
 myenv/
+venv/
 .venv/
+env/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/tsconfig.tsbuildinfo
+node_modules/
+
+# Generated data
+data/vector_store/
+
+# Logs
 *.log
+
+# Test/cache
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Docker
+.docker/
+
+# Scripts
+get-docker.sh
