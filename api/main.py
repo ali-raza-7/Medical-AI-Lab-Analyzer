@@ -285,20 +285,21 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SecurityHeadersMiddleware)
 
 _frontend_url = os.getenv("FRONTEND_URL", "")
-_frontend_login_url = (_frontend_url if _frontend_url else "http://localhost:5173") + "/login"
+_frontend_login_url = (_frontend_url if _frontend_url else "https://medical-ai-lab-analyzer.vercel.app") + "/login"
 _allowed_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
+    "https://medical-ai-lab-analyzer.vercel.app",
 ]
-if _frontend_url:
+if _frontend_url and _frontend_url not in _allowed_origins:
     _allowed_origins.append(_frontend_url)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?|https://medical-ai-lab-analyzer\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

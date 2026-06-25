@@ -13,7 +13,7 @@ SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 BACKEND_PUBLIC_URL = os.getenv("BACKEND_PUBLIC_URL", "http://localhost:8000")
 
 
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://medical-ai-lab-analyzer.vercel.app")
 
 
 def send_password_reset_email(to_email: str, token: str) -> bool:
