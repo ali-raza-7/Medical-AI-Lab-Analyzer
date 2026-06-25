@@ -157,7 +157,7 @@ export function useGoogleAuth(clientId: string): GoogleAuthResult {
             type: "standard",
             theme: options?.theme ?? "outline",
             size: options?.size ?? "large",
-            width: "100%",
+            width: "320",
             shape: options?.shape ?? "pill",
             logo_alignment: "left",
             text: options?.text ?? "continue_with",
