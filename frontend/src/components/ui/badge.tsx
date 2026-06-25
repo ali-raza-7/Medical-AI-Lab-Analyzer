@@ -24,6 +24,8 @@ export function Badge({
         v[variant],
         className,
       )}
+      role="status"
+      aria-label={`Status: ${variant}`}
       {...props}
     />
   );

@@ -5,14 +5,7 @@ from dataclasses import is_dataclass, asdict
 logger = logging.getLogger(__name__)
 
 def sanitize_for_json(obj):
-    """
-    Recursively sanitize objects for JSON serialization.
-    Rules:
-    - Primitives: None, bool, int pass through.
-    - Floats: Handle NaN/Infinity by converting to None (null).
-    - dicts/lists/dataclasses: recurse.
-    - Unknown types: convert to str().
-    """
+    """Recursively sanitize objects for JSON serialization"""
     if obj is None or isinstance(obj, (bool, int, str)):
         return obj
 

@@ -4,9 +4,8 @@ import { Skeleton } from "../components/ui/skeleton";
 import { useTheme } from "../lib/theme";
 import { useAnalyzeReport } from "../lib/hooks";
 import { useAuth } from "../lib/AuthContext";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
-// Sub-components
 import { PatientMetadataCard } from "../components/dashboard/PatientMetadataCard";
 import { AnalysisUploader } from "../components/dashboard/AnalysisUploader";
 import { AnalysisSummary } from "../components/dashboard/AnalysisSummary";
@@ -15,6 +14,7 @@ import { BiomarkerChart } from "../components/dashboard/BiomarkerChart";
 import { ResultList } from "../components/dashboard/ResultList";
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const {
     file, setFile,
@@ -47,7 +47,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[400px,1fr]">
-        <div className="space-y-6">
+        <div className="space-y-6" role="region" aria-label="Analysis input">
           <PatientMetadataCard
             age={age}
             gender={gender}
@@ -80,7 +80,7 @@ export default function Dashboard() {
                   </div>
                   <h3 className="font-bold text-slate-900 dark:text-white">Out of Credits</h3>
                   <p className="text-sm text-slate-500">You've used all your analysis credits. Top up to continue using the AI assistant.</p>
-                  <button className="w-full py-3 bg-amber-500 text-white rounded-xl font-bold hover:bg-amber-600 transition-all shadow-lg shadow-amber-500/20">
+                  <button onClick={() => navigate('/pricing')} className="w-full py-3 bg-amber-500 text-white rounded-xl font-bold hover:bg-amber-600 transition-all shadow-lg shadow-amber-500/20">
                     Buy Credits
                   </button>
                 </div>
@@ -103,7 +103,7 @@ export default function Dashboard() {
           {result && <AnalysisSummary result={result} />}
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-6" aria-live="polite" aria-label="Analysis results">
           {!result && !loading && (
             <div className="flex h-full min-h-[400px] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-white p-12 text-center dark:border-[#1e293b] dark:bg-[#0f172a]/50">
               <div className="rounded-full bg-slate-50 p-4 mb-4 dark:bg-[#1e293b]">
@@ -126,7 +126,7 @@ export default function Dashboard() {
           )}
 
           {loading && (
-            <Card className="h-full">
+            <Card className="h-full" role="status" aria-label="Analysis in progress">
               <CardContent className="p-8 space-y-6 pt-8">
                 <div className="flex items-center gap-4">
                   <Skeleton className="h-12 w-12 rounded-full" />

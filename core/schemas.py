@@ -34,14 +34,7 @@ class ReferenceRange:
 
 @dataclass(frozen=True)
 class ResolvedTest:
-    """
-    Final output schema — strict, complete, guaranteed.
-    EVERY parsed test produces exactly one ResolvedTest in output.
-    
-    RAG-READY FIELDS:
-    - test_category: retrieval bucket for pattern matching
-    - applicable_patterns: pattern IDs relevant to this test (future retrieval hook)
-    """
+    """Final output schema — strict, complete, guaranteed"""
     test_name: str
     resolved_key: Optional[str]
     value: float
@@ -52,7 +45,7 @@ class ResolvedTest:
     match_type: Literal["alias", "fuzzy", "none"]
     explanation: Optional[str] = None
     clinical_insight: Optional[dict] = None
-    # RAG FIELDS
+# RAG FIELDS
     test_category: str = ""                          # retrieval bucketing (e.g., "CBC", "Lipids")
     applicable_patterns: list[str] = None            # pattern IDs for semantic retrieval
 
@@ -67,19 +60,13 @@ class ResolvedTest:
             raise ValueError(f"invalid status: {self.status}")
         if self.match_type not in ("alias", "fuzzy", "none"):
             raise ValueError(f"invalid match_type: {self.match_type}")
-        # Ensure applicable_patterns is always a list (even if None passed)
+# Ensure applicable_patterns is always a list (even if None passed)
         if self.applicable_patterns is None:
             object.__setattr__(self, "applicable_patterns", [])
 
     @staticmethod
     def _safe_clinical_insight(raw: Optional[dict]) -> Optional[dict]:
-        """
-        Guarantee clinical_insight is fully frontend-safe.
-        - String fields → str or omitted
-        - List fields  → list[str] (non-string items coerced via str())
-        - Any unexpected nested objects → str() coercion
-        Never returns a nested object; always returns None or a flat dict.
-        """
+        """Sanitize clinical_insight to be frontend-safe (flat dict only)."""
         import logging as _logging
         _log = _logging.getLogger(__name__)
 
@@ -122,7 +109,7 @@ class ResolvedTest:
             else:
                 _log.warning("[schema] clinical_insight.%s is %s, expected list — skipping", field, type(val).__name__)
 
-        # Pass through any extra string/number keys, warn + skip objects
+# Pass through any extra string/number keys, warn + skip objects
         known = set(STRING_FIELDS) | set(LIST_FIELDS)
         for k, v in raw.items():
             if k in known:
@@ -139,7 +126,7 @@ class ResolvedTest:
         Convert to dict for JSON serialization — FRONTEND SAFE.
         All values are primitives (no nested objects).
         """
-        # Format reference range as string for display
+# Format reference range as string for display
         reference_range_text = ""
         if self.reference_range:
             if self.reference_range.low is not None and self.reference_range.high is not None:
@@ -160,27 +147,27 @@ class ResolvedTest:
             "value": self.value,
             "unit": self.unit,
             "status": self.status,
-            # ── Flat reference range fields (for current frontend) ───────────
+# Flat reference range fields (for current frontend)
             "reference_range_text": reference_range_text,
             "reference_low": self.reference_range.low if self.reference_range else None,
             "reference_high": self.reference_range.high if self.reference_range else None,
             "reference_unit": self.reference_range.unit if self.reference_range else None,
-            # ── Structured reference range (for compatibility) ───────────────
+# Structured reference range (for compatibility)
             "reference_range": {
                 "low": self.reference_range.low if self.reference_range else None,
                 "high": self.reference_range.high if self.reference_range else None,
                 "unit": self.reference_range.unit if self.reference_range else None,
             } if self.reference_range else None,
-            # ── Scores ───────────────────────────────────────────────────────
+# Scores
             "confidence": round(self.confidence, 2),
             "match_type": self.match_type,
-            # ── Text fields (always strings, never None) ─────────────────────
+# Text fields (always strings, never None)
             "explanation": self.explanation if self.explanation else "",
-            # ── Clinical insight: sanitized flat dict or null ────────────────
+# Clinical insight: sanitized flat dict or null
             "clinical_insight": self._safe_clinical_insight(
                 self.clinical_insight if isinstance(self.clinical_insight, dict) else None
             ),
-            # ── RAG-READY FIELDS: retrieval bucketing & pattern matching ─────
+# RAG-READY FIELDS: retrieval bucketing & pattern matching
             "test_category": self.test_category,
             "applicable_patterns": self.applicable_patterns if self.applicable_patterns else [],
         }

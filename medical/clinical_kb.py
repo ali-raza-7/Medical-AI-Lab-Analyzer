@@ -1,18 +1,4 @@
-"""
-Centralized Clinical Knowledge Base — structured for RAG retrieval.
-
-This module consolidates all medical knowledge patterns and constants into a single
-source of truth that is:
-1. Deterministic and indexable
-2. Ready for future vector embeddings
-3. Optimized for pattern matching
-4. Retrieval-friendly with metadata
-
-RAG INTEGRATION POINTS:
-- Each pattern can be embedded for semantic retrieval
-- Test groupings map to retrieval buckets
-- Pattern keywords enable keyword-based fallback search
-"""
+"""Centralized Clinical Knowledge Base — structured for RAG retrieval"""
 from __future__ import annotations
 import json
 import logging
@@ -23,21 +9,11 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # PATTERN DEFINITIONS — retrieval-friendly structure
-# ──────────────────────────────────────────────────────────────────────────────
 
 @dataclass(frozen=True)
 class ClinicalPattern:
-    """
-    Represents a detectable clinical condition pattern.
-    
-    RAG FIELDS:
-    - pattern_id: unique identifier for embedding/retrieval
-    - test_keys: which tests are involved (retrieval filter)
-    - keywords: for keyword-based fallback search
-    - severity_level: for ranking retrieved results
-    """
+    """Represents a detectable clinical condition pattern"""
     pattern_id: str                         # e.g. "anemia_iron_deficiency"
     condition_name: str                     # display name
     test_dependencies: list[str]            # required test_key matches
@@ -48,22 +24,14 @@ class ClinicalPattern:
     suggested_next_steps: list[str]
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # CLINICAL PATTERNS — CENTRALIZED (future retrieval source)
-# ──────────────────────────────────────────────────────────────────────────────
 
 def _load_clinical_patterns_from_json() -> list[ClinicalPattern]:
-    """Load clinical patterns from `clinical_kb.json` located next to this module.
-
-    The JSON should be an array of objects with keys that map to the
-    `ClinicalPattern` fields. Common alternative keys are supported
-    (e.g. `test_keys` → `test_dependencies`). If the file is missing or
-    malformed an empty list is returned to avoid breaking imports.
-    """
+    """Load clinical patterns from clinical_kb.json (empty list on failure)."""
     path = Path(__file__).parent / "clinical_kb.json"
     if not path.exists():
-        logger.warning(
-            "[clinical_kb] clinical_kb.json missing at %s; falling back to hardcoded patterns",
+        logger.error(
+            "clinical_kb.json not found at expected path: %s; falling back to hardcoded patterns",
             path,
         )
         return []
@@ -79,13 +47,13 @@ def _load_clinical_patterns_from_json() -> list[ClinicalPattern]:
 
     patterns: list[ClinicalPattern] = []
     for entry in data:
-        # support common alternative key names
+# support common alternative key names
         test_deps = entry.get("test_dependencies") or entry.get("test_keys") or entry.get("tests") or []
         keywords = entry.get("keywords") or entry.get("kw") or []
         patterns.append(
             ClinicalPattern(
                 pattern_id=entry.get("pattern_id") or entry.get("id"),
-                condition_name=entry.get("condition_name") or entry.get("condition") or "",
+                condition_name=entry.get("condition_name") or entry.get("condition") or entry.get("name") or "",
                 test_dependencies=list(test_deps),
                 keywords=list(keywords),
                 description=entry.get("description", ""),
@@ -104,7 +72,7 @@ _loaded_patterns = _load_clinical_patterns_from_json()
 
 # Original hardcoded patterns (kept as fallback to avoid breaking behavior)
 _HARDCODED_CLINICAL_PATTERNS = [
-    # ─ ANEMIA PATTERNS ─
+# ANEMIA PATTERNS
     ClinicalPattern(
         pattern_id="anemia_iron_deficiency",
         condition_name="Iron Deficiency Anemia",
@@ -126,7 +94,7 @@ _HARDCODED_CLINICAL_PATTERNS = [
         suggested_next_steps=["B12 level", "Folate level", "Parietal cell antibody test"],
     ),
 
-    # ─ INFECTION/IMMUNE PATTERNS ─
+# INFECTION/IMMUNE PATTERNS
     ClinicalPattern(
         pattern_id="infection_bacterial",
         condition_name="Bacterial Infection",
@@ -148,7 +116,7 @@ _HARDCODED_CLINICAL_PATTERNS = [
         suggested_next_steps=["Supportive care", "Repeat labs if symptoms persist"],
     ),
 
-    # ─ IRON METABOLISM PATTERNS ─
+# IRON METABOLISM PATTERNS
     ClinicalPattern(
         pattern_id="iron_overload",
         condition_name="Iron Overload",
@@ -160,7 +128,7 @@ _HARDCODED_CLINICAL_PATTERNS = [
         suggested_next_steps=["Transferrin saturation", "Genetic testing for HFE", "Iron chelation therapy"],
     ),
 
-    # ─ LIPID PATTERNS ─
+# LIPID PATTERNS
     ClinicalPattern(
         pattern_id="dyslipidemia_high_ldl",
         condition_name="Elevated LDL Cholesterol",
@@ -182,7 +150,7 @@ _HARDCODED_CLINICAL_PATTERNS = [
         suggested_next_steps=["Increase physical activity", "Smoking cessation", "Diet modification"],
     ),
 
-    # ─ THYROID PATTERNS ─
+# THYROID PATTERNS
     ClinicalPattern(
         pattern_id="thyroid_hypothyroidism",
         condition_name="Hypothyroidism",
@@ -204,7 +172,7 @@ _HARDCODED_CLINICAL_PATTERNS = [
         suggested_next_steps=["TSI/TRAb antibodies", "Thyroid ultrasound", "Endocrinology referral"],
     ),
 
-    # ─ KIDNEY PATTERNS ─
+# KIDNEY PATTERNS
     ClinicalPattern(
         pattern_id="kidney_dysfunction",
         condition_name="Renal Dysfunction",
@@ -216,7 +184,7 @@ _HARDCODED_CLINICAL_PATTERNS = [
         suggested_next_steps=["Estimated GFR", "Urinalysis", "Renal imaging if indicated"],
     ),
 
-    # ─ LIVER PATTERNS ─
+# LIVER PATTERNS
     ClinicalPattern(
         pattern_id="liver_hepatitis",
         condition_name="Hepatitis/Liver Inflammation",
@@ -238,7 +206,7 @@ _HARDCODED_CLINICAL_PATTERNS = [
         suggested_next_steps=["Liver ultrasound with Doppler", "Platelet count", "INR/PT", "Hepatology referral"],
     ),
 
-    # ─ METABOLIC PATTERNS ─
+# METABOLIC PATTERNS
     ClinicalPattern(
         pattern_id="electrolyte_hyponatremia",
         condition_name="Low Sodium (Hyponatremia)",
@@ -260,7 +228,39 @@ _HARDCODED_CLINICAL_PATTERNS = [
         suggested_next_steps=["ECG", "Repeat K+ (rule out hemolysis)", "Calcium/glucose/insulin if critical"],
     ),
 
-    # ─ GLUCOSE CONTROL PATTERNS ─
+# PLATELET / CBC PATTERNS
+    ClinicalPattern(
+        pattern_id="rdw_high",
+        condition_name="Elevated RDW (Anisocytosis)",
+        test_dependencies=["rdw", "rdw_sd"],
+        keywords=["high RDW", "anisocytosis", "red cell distribution width"],
+        description="High RDW — red blood cells vary significantly in size",
+        severity_level="mild",
+        possible_causes=["Iron deficiency", "B12/folate deficiency", "Mixed anemia", "Recent blood loss"],
+        suggested_next_steps=["CBC recheck", "Iron studies", "B12 and folate levels"],
+    ),
+    ClinicalPattern(
+        pattern_id="mpv_abnormal",
+        condition_name="Abnormal Mean Platelet Volume",
+        test_dependencies=["mpv"],
+        keywords=["high MPV", "low MPV", "platelet volume", "mean platelet volume"],
+        description="Abnormal MPV — may indicate platelet production or destruction issues",
+        severity_level="mild",
+        possible_causes=["High MPV: Increased platelet destruction", "Low MPV: Bone marrow disorder", "Inflammatory conditions"],
+        suggested_next_steps=["Platelet count recheck", "Peripheral smear review", "Clinical correlation"],
+    ),
+    ClinicalPattern(
+        pattern_id="pdw_high",
+        condition_name="Elevated Platelet Distribution Width",
+        test_dependencies=["pdw"],
+        keywords=["high PDW", "platelet distribution width", "platelet anisocytosis"],
+        description="High PDW — variation in platelet size, often seen with high MPV",
+        severity_level="mild",
+        possible_causes=["Increased platelet turnover", "Inflammatory conditions", "Iron deficiency"],
+        suggested_next_steps=["Repeat CBC with platelet parameters", "Iron studies", "Clinical correlation"],
+    ),
+
+# GLUCOSE CONTROL PATTERNS
     ClinicalPattern(
         pattern_id="diabetes_poorly_controlled",
         condition_name="Poorly Controlled Diabetes",
@@ -291,14 +291,12 @@ for pattern in CLINICAL_PATTERNS:
         PATTERNS_BY_TEST[test_key].append(pattern.pattern_id)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # TEST CATEGORIZATION — retrieval bucketing
-# ──────────────────────────────────────────────────────────────────────────────
 
 TEST_CATEGORIES = {
     "CBC": [
         "hemoglobin", "hematocrit", "rbc", "wbc", "platelets",
-        "mcv", "mch", "mchc", "rdw"
+        "mcv", "mch", "mchc", "rdw", "rdw_sd", "mpv", "pdw"
     ],
     "Differential": [
         "neutrophils_pct", "neutrophils_abs", "lymphocytes_pct",
@@ -309,9 +307,9 @@ TEST_CATEGORIES = {
         "chloride", "calcium", "magnesium", "phosphorus"
     ],
     "Kidney": ["creatinine", "urea", "uric_acid"],
-    "Liver": ["alt", "ast", "alp", "bilirubin", "albumin"],
-    "Lipids": ["total_cholesterol", "ldl", "hdl", "triglycerides"],
-    "Thyroid": ["tsh", "t3", "t4"],
+    "Liver": ["alt", "ast", "alp", "ggt", "total_bilirubin", "direct_bilirubin", "indirect_bilirubin", "albumin", "total_protein", "ag_ratio", "bilirubin"],
+    "Lipids": ["total_cholesterol", "ldl", "hdl", "triglycerides", "vldl", "non_hdl_cholesterol"],
+    "Thyroid": ["tsh", "free_t4", "free_t3", "t3", "t4"],
     "Iron": ["iron", "ferritin", "tibc"],
     "Vitamins": ["vitamin_d", "vitamin_b12"],
     "Inflammatory": ["esr", "crp"],
@@ -324,14 +322,12 @@ for category, test_keys in TEST_CATEGORIES.items():
         TEST_KEY_TO_CATEGORY[test_key] = category
 
 
-# ──────────────────────────────────────────────────────────────────────────────
 # RETRIEVAL HELPER FUNCTIONS (future vector search fallback)
-# ──────────────────────────────────────────────────────────────────────────────
 
 def get_patterns_for_test(test_key: str) -> list[str]:
     """
     Returns pattern IDs that involve this test.
-    
+
     FUTURE: This will be enhanced with semantic similarity when vectors are available.
     Currently: keyword and structural matching.
     """
@@ -341,7 +337,7 @@ def get_patterns_for_test(test_key: str) -> list[str]:
 def get_patterns_by_category(category: str) -> list[str]:
     """
     Returns all pattern IDs for a clinical category.
-    
+
     FUTURE: Can be vectorized and sorted by relevance.
     """
     if category not in TEST_CATEGORIES:
@@ -356,7 +352,7 @@ def get_patterns_by_category(category: str) -> list[str]:
 def find_patterns_by_keywords(keywords: list[str]) -> list[str]:
     """
     Keyword-based pattern search.
-    
+
     FUTURE: Will be supplemented with vector similarity search.
     Currently: exact keyword matching as fallback.
     """

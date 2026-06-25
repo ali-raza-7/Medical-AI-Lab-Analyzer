@@ -58,6 +58,10 @@ export interface CompletenessInfo {
 
 export type AnalyzeResponse = {
   patient?: { gender: string; age: number };
+  patient_info?: {
+    age?: number | null;
+    gender?: string | null;
+  };
   patient_detected?: {
     gender?: string | null;
     age?: number | null;

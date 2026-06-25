@@ -1,10 +1,12 @@
-import { useState } from "react";
-import { analyzeReport } from "../api";
-import { AnalyzeResponse, ApiError } from "../types";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { api, analyzeReport, waitForResult } from "../api";
+import type { AnalyzeResponse } from "../types";
 import { useAuth } from "./AuthContext";
 
 export function useAnalyzeReport() {
   const { refreshUser } = useAuth();
+  const abortRef = useRef<AbortController | null>(null);
+
   const [file, setFile] = useState<File | null>(null);
   const [text, setText] = useState("");
   const [gender, setGender] = useState("male");
@@ -17,66 +19,63 @@ export function useAnalyzeReport() {
   const [error, setError] = useState("");
   const [result, setResult] = useState<AnalyzeResponse | null>(null);
 
-  const handleAnalyze = async () => {
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
+
+  const handleAnalyze = useCallback(async () => {
     if (!file && (!text || text.trim() === "")) {
       setError("Input required: Please upload a file or provide report text.");
       return;
     }
-    
-    console.log("[handleAnalyze] Starting analysis:", {
-      has_file: !!file,
-      file_name: file?.name,
-      has_text: !!text,
-      text_length: text?.length || 0,
-      text_preview: text?.substring(0, 100),
-      gender,
-      age,
-    });
-    
+
+    abortRef.current?.abort();
+    abortRef.current = new AbortController();
+
     setError("");
     setLoading(true);
     setResult(null);
     try {
-      console.log("[handleAnalyze] Calling analyzeReport...");
-      const data = await analyzeReport({ file, text, gender, age });
-      console.log("[handleAnalyze] Analysis successful");
-      
+      const health = await api.get<{ status: string }>("/worker/health");
+      if (health.data.status === "offline") {
+        throw new Error("Analysis service is offline. Please contact support.");
+      }
+
+      const { task_id } = await analyzeReport({ file, text, gender, age });
+      const data = await waitForResult(task_id, abortRef.current?.signal);
+
       if (!data || !Array.isArray(data.results)) {
         throw new Error("Invalid response format from server");
       }
-      const detected = data.patient_detected ?? null;
-      if (detected) {
-        if (detected.gender && !manualGenderOverride) {
-          setGender(detected.gender);
+      const info = data.patient_info ?? data.patient_detected ?? null;
+      if (info) {
+        if (info.gender && !manualGenderOverride) {
+          setGender(info.gender);
         }
-        if (typeof detected.age === "number" && !manualAgeOverride) {
-          setAge(detected.age);
+        if (typeof info.age === "number" && !manualAgeOverride) {
+          setAge(info.age);
         }
       }
       setResult(data);
-      // Refresh credits after successful analysis
       await refreshUser();
     } catch (err: unknown) {
-      console.error("[handleAnalyze] Error:", err);
+      if (err instanceof DOMException && err.name === "AbortError") return;
       let message = "Failed to analyze report";
-      
       if (err instanceof Error) {
         message = err.message;
       }
-      
-      // Axios error handling with improved type safety
-      const axiosError = err as any;
+      const axiosError = err as { response?: { data?: { detail?: unknown } } };
       if (axiosError.response?.data?.detail) {
         const detail = axiosError.response.data.detail;
         message = typeof detail === "string" ? detail : JSON.stringify(detail);
       }
-      
-      console.error("[handleAnalyze] Final error message:", message);
       setError(message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [file, text, gender, age, manualAgeOverride, manualGenderOverride, refreshUser]);
 
   return {
     file, setFile,

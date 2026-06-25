@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import { api } from '../api';
+import React from 'react';
 import { Card, CardContent } from '../components/ui/card';
 import { FileText, Calendar, ArrowRight, AlertTriangle } from 'lucide-react';
 import { AnalysisSummary } from '../components/dashboard/AnalysisSummary';
@@ -8,50 +7,21 @@ import { BiomarkerChart } from '../components/dashboard/BiomarkerChart';
 import { ResultList } from '../components/dashboard/ResultList';
 import { useTheme } from '../lib/theme';
 import { useAuth } from '../lib/AuthContext';
+import { useHistory } from '../lib/useHistory';
 import { Link } from 'react-router-dom';
-
-interface HistoryItem {
-  id: string;
-  file_name: string;
-  created_at: string;
-  results_json: any;
-}
+import type { AnalyzeResponse } from '../types';
 
 const HistoryPage: React.FC = () => {
-  const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [selectedAnalysis, setSelectedAnalysis] = useState<HistoryItem | null>(null);
   const { resolvedTheme } = useTheme();
   const { user } = useAuth();
+  const { history, loading, error } = useHistory();
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
 
-  useEffect(() => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-
-    const fetchHistory = async () => {
-      try {
-        const res = await api.get('/history');
-        // Defensive: always ensure we have an array
-        const data = Array.isArray(res.data) ? res.data : [];
-        setHistory(data);
-      } catch (err: any) {
-        console.error("Failed to fetch history", err);
-        const msg = err.response?.data?.detail || 'Failed to load history.';
-        setError(typeof msg === 'string' ? msg : JSON.stringify(msg));
-        setHistory([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchHistory();
-  }, [user]);
+  const selectedAnalysis = history.find((h) => h.id === selectedId) || null;
 
   if (!user) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4" role="region" aria-label="Sign in required">
         <div className="p-4 bg-amber-100 dark:bg-amber-900/30 rounded-full">
           <AlertTriangle className="h-8 w-8 text-amber-500" />
         </div>
@@ -64,7 +34,23 @@ const HistoryPage: React.FC = () => {
     );
   }
 
-  if (loading) return <div className="p-8 text-center dark:text-white">Loading history...</div>;
+  if (loading) {
+    return (
+      <div className="space-y-6" role="status" aria-label="Loading history">
+        <div className="flex flex-col gap-1">
+          <div className="h-8 w-48 animate-pulse rounded-lg bg-slate-200 dark:bg-slate-800" />
+          <div className="h-4 w-64 animate-pulse rounded-lg bg-slate-100 dark:bg-slate-800/50" />
+        </div>
+        <div className="grid gap-6 lg:grid-cols-[350px,1fr]">
+          <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-20 animate-pulse rounded-2xl bg-slate-200 dark:bg-slate-800" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -74,13 +60,13 @@ const HistoryPage: React.FC = () => {
       </div>
 
       {error && (
-        <div className="p-4 text-sm text-red-500 bg-red-100 dark:bg-red-900/30 rounded-lg">
+        <div className="p-4 text-sm text-red-500 bg-red-100 dark:bg-red-900/30 rounded-lg" role="alert">
           {error}
         </div>
       )}
 
       <div className="grid gap-6 lg:grid-cols-[350px,1fr]">
-        <div className="space-y-4">
+        <div className="space-y-4" role="list" aria-label="Analysis history list">
           {history.length === 0 ? (
             <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 text-slate-400">
               No past analyses found. Analyze a report first!
@@ -88,9 +74,14 @@ const HistoryPage: React.FC = () => {
           ) : (
             history.map((item) => (
               <Card 
-                key={item.id} 
-                className={`cursor-pointer transition-all hover:ring-2 hover:ring-emerald-500/50 ${selectedAnalysis?.id === item.id ? 'ring-2 ring-emerald-500' : ''}`}
-                onClick={() => setSelectedAnalysis(item)}
+                key={item.id}
+                className={`cursor-pointer transition-all hover:ring-2 hover:ring-emerald-500/50 ${selectedId === item.id ? 'ring-2 ring-emerald-500' : ''}`}
+                onClick={() => setSelectedId(item.id)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedId(item.id); }}
+                role="listitem"
+                tabIndex={0}
+                aria-label={`Analysis from ${item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Unknown date'}`}
+                aria-current={selectedId === item.id ? 'true' : undefined}
               >
                 <CardContent className="p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -112,7 +103,7 @@ const HistoryPage: React.FC = () => {
           )}
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-6" aria-live="polite" aria-label="Analysis detail">
           {selectedAnalysis ? (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
               <AnalysisSummary result={selectedAnalysis.results_json} />

@@ -1,14 +1,4 @@
-"""
-Multi-LLM explanation generator with Gemini (primary) and Groq (fallback).
-
-Architecture:
-  1. Try Gemini API (google-generativeai)
-  2. If Gemini fails → fallback to Groq (llama-3.3-70b-versatile)
-  3. If both fail → structured text fallback
-  4. Cache explanations to avoid repeated LLM calls for same inputs
-
-Debug logging is always active so errors surface in uvicorn console.
-"""
+"""Multi-LLM explanation generator with Gemini (primary) and Groq (fallback)"""
 from __future__ import annotations
 
 import logging
@@ -24,9 +14,13 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-# ════════════════════════════════════════════════════════════════════════════
+# Startup validation: at least one LLM API key must be configured
+if not os.getenv("GROQ_API_KEY") and not os.getenv("GEMINI_API_KEY"):
+    raise RuntimeError(
+        "No LLM API key configured. Set GROQ_API_KEY or GEMINI_API_KEY in .env"
+    )
+
 # EXPLANATION CACHE
-# ════════════════════════════════════════════════════════════════════════════
 
 _explanation_cache: dict[str, str] = {}  # Cache of generated explanations
 MAX_CACHE_SIZE = 500  # Limit cache to prevent memory bloat
@@ -49,18 +43,16 @@ def _get_cached_explanation(test: str, value: float, status: str, ref_range: str
 
 def _cache_explanation(test: str, value: float, status: str, ref_range: str, explanation: str, gender: str = "", age: int | None = None) -> None:
     """Store explanation in cache."""
-    # Simple eviction: clear cache if too large
+# Simple eviction: clear cache if too large
     if len(_explanation_cache) >= MAX_CACHE_SIZE:
         _explanation_cache.clear()
         logger.debug("[cache] cleared explanation cache (size limit reached)")
-    
+
     key = _make_cache_key(test, value, status, ref_range, gender, age)
     _explanation_cache[key] = explanation
     logger.debug("[cache] STORED explanation for %r (key=%s, size=%d)", test, key, len(_explanation_cache))
 
-# ════════════════════════════════════════════════════════════════════════════
 # GEMINI CLIENT INITIALIZATION
-# ════════════════════════════════════════════════════════════════════════════
 
 GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "").strip()
 GEMINI_MODEL = "gemini-1.5-flash"  # Lightweight, fast model
@@ -93,9 +85,7 @@ else:
         logger.error("[explainer] Failed to initialize Gemini client: %s", exc)
         gemini_available = False
 
-# ════════════════════════════════════════════════════════════════════════════
 # GROQ CLIENT INITIALIZATION (FALLBACK)
-# ════════════════════════════════════════════════════════════════════════════
 
 GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "").strip()
 GROQ_MODEL = "llama-3.3-70b-versatile"
@@ -122,9 +112,7 @@ else:
         groq_client = None
 
 
-# ════════════════════════════════════════════════════════════════════════════
 # UNIFIED EXPLANATION GENERATION
-# ════════════════════════════════════════════════════════════════════════════
 
 async def generate_explanation(
     test: str,
@@ -137,45 +125,34 @@ async def generate_explanation(
     age: int | None = None,
     age_group: str = "",
 ) -> str:
-    """
-    Generate medical explanation using Gemini (primary) or Groq (fallback).
-    Results are cached to avoid repeated LLM calls for identical inputs.
-    
-    Tries in order:
-      1. Check cache for identical explanation
-      2. Gemini API (google-generativeai)
-      3. Groq API (llama-3.3-70b-versatile)
-      4. Structured text fallback
-    
-    All errors are logged and handled gracefully.
-    """
-    
-    # -- CHECK CACHE FIRST --
+    """Generate medical explanation using Gemini (primary) or Groq (fallback)"""
+
+# CHECK CACHE FIRST
     cached = _get_cached_explanation(test, value, status, ref_range, gender=gender, age=age)
     if cached:
         logger.debug("[cache] cache hit for test=%r", test)
         return cached
-    
-    # ── Build the prompt (shared between APIs) ────────────────────────────────
+
+# Build the prompt (shared between APIs)
     prompt = _build_prompt(test, value, ref_range, context, status, gender, age, age_group)
-    
-    # ── Tier 1: Try Gemini ────────────────────────────────────────────────────
+
+# Tier 1: Try Gemini
     if gemini_available:
         logger.info("[explainer] Attempting Gemini generation for test=%r", test)
         result = await _generate_with_gemini(prompt, test)
         if result:
             _cache_explanation(test, value, status, ref_range, result, gender=gender, age=age)
             return result
-    
-    # ── Tier 2: Fallback to Groq ────────────────────────────────────────────────────────────────────────────────────────
+
+# Tier 2: Fallback to Groq
     if groq_client:
         logger.info("[explainer] Attempting Groq generation for test=%r", test)
         result = await _generate_with_groq(prompt, test)
         if result:
             _cache_explanation(test, value, status, ref_range, result, gender=gender, age=age)
             return result
-    
-    # ── Tier 3: Structured text fallback ─────────────────────────────────────
+
+# Tier 3: Structured text fallback
     logger.warning("[explainer] All LLM APIs unavailable, using fallback text")
     fallback_result = _fallback(test, value, ref_range, context, status, age_group,
                      note="⚠ Explanation service temporarily unavailable.")
@@ -183,20 +160,12 @@ async def generate_explanation(
     return fallback_result
 
 
-# ════════════════════════════════════════════════════════════════════════════
 # GEMINI GENERATION
-# ════════════════════════════════════════════════════════════════════════════
 
 async def _generate_with_gemini(prompt: str, test: str) -> str | None:
-    """
-    Call Gemini API for explanation generation.
-    
-    Returns:
-      - Generated text if successful
-      - None if failed (caller will try next tier)
-    """
+    """Call Gemini API for explanation generation."""
     try:
-        # Run blocking Gemini call in executor to avoid blocking event loop
+# Run blocking Gemini call in executor to avoid blocking event loop
         loop = asyncio.get_event_loop()
         response = await loop.run_in_executor(
             None,
@@ -208,7 +177,7 @@ async def _generate_with_gemini(prompt: str, test: str) -> str | None:
                 }
             )
         )
-        
+
         if response.text:
             logger.info(
                 "[explainer] Gemini success — test=%r, chars=%d",
@@ -218,7 +187,7 @@ async def _generate_with_gemini(prompt: str, test: str) -> str | None:
         else:
             logger.warning("[explainer] Gemini returned empty response for test=%r", test)
             return None
-            
+
     except Exception as exc:
         logger.error(
             "[explainer] Gemini API error for test=%r — %s: %s",
@@ -227,22 +196,14 @@ async def _generate_with_gemini(prompt: str, test: str) -> str | None:
         return None
 
 
-# ════════════════════════════════════════════════════════════════════════════
 # GROQ GENERATION (FALLBACK)
-# ════════════════════════════════════════════════════════════════════════════
 
 async def _generate_with_groq(prompt: str, test: str) -> str | None:
-    """
-    Call Groq API for explanation generation (fallback).
-    
-    Returns:
-      - Generated text if successful
-      - None if failed (caller will try next tier)
-    """
+    """Call Groq API for explanation generation (fallback)."""
     if not groq_client:
         logger.warning("[explainer] Groq client not available")
         return None
-    
+
     try:
         response = await groq_client.chat.completions.create(
             model=GROQ_MODEL,
@@ -250,7 +211,7 @@ async def _generate_with_groq(prompt: str, test: str) -> str | None:
             max_tokens=300,
             temperature=0.4,
         )
-        
+
         result_text = response.choices[0].message.content
         if result_text:
             logger.info(
@@ -261,7 +222,7 @@ async def _generate_with_groq(prompt: str, test: str) -> str | None:
         else:
             logger.warning("[explainer] Groq returned empty response for test=%r", test)
             return None
-            
+
     except Exception as exc:
         logger.error(
             "[explainer] Groq API error for test=%r — %s: %s",
@@ -270,9 +231,7 @@ async def _generate_with_groq(prompt: str, test: str) -> str | None:
         return None
 
 
-# ════════════════════════════════════════════════════════════════════════════
 # PROMPT ENGINEERING
-# ════════════════════════════════════════════════════════════════════════════
 
 def _build_prompt(
     test: str,
@@ -318,9 +277,7 @@ End with: "Please consult your doctor for medical advice."
 Generate the explanation now:"""
 
 
-# ════════════════════════════════════════════════════════════════════════════
 # FALLBACK TEXT GENERATION
-# ════════════════════════════════════════════════════════════════════════════
 
 def _fallback(
     test: str,

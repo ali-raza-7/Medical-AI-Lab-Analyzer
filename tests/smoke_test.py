@@ -36,14 +36,14 @@ def status_for(line: str, gender: str = "male", age_group: str = "adult") -> str
 
 
 def main() -> None:
-    # ── Phase 6.1: Original must-pass tests ─────────────────────────────────
+# Phase 6.1: Original must-pass tests
     assert status_for("WBC Count 7.5 x10^3/uL") == "normal",   "WBC 7.5 should be normal"
     assert status_for("Platelet Count 250 x10^3/uL") == "normal", "Platelet 250 should be normal"
     assert status_for("RBC Count 4.8 x10^6/uL") == "normal",   "RBC 4.8 should be normal"
     assert status_for("Glucose 92 mg/dL") == "normal",          "Glucose 92 should be normal"
     assert status_for("Creatinine 1.6 mg/dL") == "high",        "Creatinine 1.6 should be high"
 
-    # ── Phase 6.2: New test cases ────────────────────────────────────────────
+# Phase 6.2: New test cases
     assert status_for("Hemoglobin 9.5 g/dL", gender="male") == "low",    "Hb 9.5 male should be low"
     assert status_for("Hemoglobin 13.5 g/dL", gender="female") == "normal", "Hb 13.5 female should be normal"
     assert status_for("TSH 8.5 mIU/L") == "high",                        "TSH 8.5 should be high"

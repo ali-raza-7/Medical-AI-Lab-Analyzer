@@ -41,7 +41,7 @@ class LabReferenceDB:
         return cls._instance
 
     def _load_data(self):
-        # Determine path to JSON relative to this file
+# Determine path to JSON relative to this file
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         json_path = os.path.join(base_dir, "medical", "lab_reference_dataset.json")
 
@@ -51,7 +51,7 @@ class LabReferenceDB:
                 for entry in data:
                     key = entry["key"]
 
-                    # Convert raw JSON ranges to ReferenceRange objects
+# Convert raw JSON ranges to ReferenceRange objects
                     ranges = {}
                     for gender, groups in entry.get("ranges", {}).items():
                         ranges[gender] = {}
@@ -73,7 +73,7 @@ class LabReferenceDB:
             logger.info(f"Loaded {len(self._tests)} tests from {json_path}")
         except Exception as e:
             logger.error(f"Failed to load reference dataset: {e}")
-            # Minimal fallback to avoid total crash
+# Minimal fallback to avoid total crash
             self._tests = {}
 
     def get_test(self, key: str) -> Optional[TestDefinition]:
@@ -83,7 +83,6 @@ class LabReferenceDB:
         return self._tests
 
 
-# ── Global Instance ──────────────────────────────────────────────────────────
 _db = LabReferenceDB()
 
 # Backward Compatibility Layer
@@ -91,7 +90,7 @@ TESTS = _db.get_all_tests()
 
 def get_test_definition(key: str) -> Optional[TestDefinition]:
     """Public API to get test metadata."""
-    # Standardize incoming keys (e.g. pluralization fix)
+# Standardize incoming keys (e.g. pluralization fix)
     if key == "neutrophil_abs": key = "neutrophils_abs"
     return _db.get_test(key)
 
@@ -107,7 +106,7 @@ def get_reference_range(key: str, gender: str, age_group: str) -> Optional[Refer
 
     by_gender = td.ranges.get(g)
     if not by_gender:
-        # Fallback: try the other gender's ranges before giving up
+# Fallback: try the other gender's ranges before giving up
         fallback_gender = "female" if g == "male" else "male"
         by_gender = td.ranges.get(fallback_gender)
         if not by_gender:
@@ -118,4 +117,3 @@ def get_reference_range(key: str, gender: str, age_group: str) -> Optional[Refer
         )
 
     return by_gender.get(ag) or by_gender.get("adult")
-

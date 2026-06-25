@@ -1,12 +1,13 @@
+import { memo } from "react";
 import { Badge } from "../ui/badge";
 import { ResultItem } from "./ResultItem";
-import { AnalyzeResponse } from "../../types";
+import type { AnalyzeResponse } from "../../types";
 
 interface ResultListProps {
   result: AnalyzeResponse;
 }
 
-export function ResultList({ result }: ResultListProps) {
+export const ResultList = memo(function ResultList({ result }: ResultListProps) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -16,11 +17,15 @@ export function ResultList({ result }: ResultListProps) {
         <Badge variant="outline">{result.results.length} Tests Parsed</Badge>
       </div>
 
-      <div className="grid gap-3">
+      <div className="grid gap-3" role="list" aria-label="Detailed test results">
         {result.results.map((r, idx) => (
-          <ResultItem key={idx} result={r} index={idx} />
+          <ResultItem
+            key={r.resolved_key || r.test_name || idx}
+            result={r}
+            index={idx}
+          />
         ))}
       </div>
     </div>
   );
-}
+});

@@ -13,7 +13,7 @@ class MedicalNormalizer:
     def __init__(self, reference_path: str = "medical/lab_reference_dataset.json"):
         self.reference_data = self._load_reference(reference_path)
         self.key_map = self._build_key_map()
-        
+
     def _load_reference(self, path: str) -> List[Dict[str, Any]]:
         try:
             with open(path, 'r') as f:
@@ -29,7 +29,7 @@ class MedicalNormalizer:
             key = entry['key']
             mapping[key.lower()] = key
             mapping[entry['display_name'].lower()] = key
-        
+
         # Add common clinical aliases and OCR typos
         aliases = {
             "hgb": "hemoglobin",
@@ -59,16 +59,16 @@ class MedicalNormalizer:
         """Extracts a numeric value from a noisy OCR string."""
         if raw_value is None: return None
         s = str(raw_value).strip().lower()
-        
+
         # Specific cleanup for known noise patterns
         s = re.sub(r'\borsl\b', '', s)
         s = re.sub(r'\bmeeacop\b', '', s)
         s = re.sub(r'\ba\b', ' ', s) # handles "6 a"
-        
+
         # Remove scientific notation noise but keep the structure
         s = s.replace('x10^', 'e')
         s = s.replace('x 10^', 'e')
-        
+
         # Extract first valid number (float or int)
         match = re.search(r"[-+]?\d*\.\d+|\d+", s)
         if match:
@@ -88,16 +88,16 @@ class MedicalNormalizer:
             "mchc": (100, 10.0),
             "mcv": (500, 10.0),
         }
-        
+
         if key in scaling_fixes:
             threshold, divisor = scaling_fixes[key]
             if value >= threshold:
                 return value / divisor
-        
+
         # Percentage scaling
         if "pct" in key or key in ["neutrophils_pct", "lymphocytes_pct", "monocytes_pct", "eosinophils_pct", "basophils_pct"]:
             if value > 100: return value / 10.0
-            
+
         return value
 
     def get_canonical_key(self, test_name: str) -> Optional[str]:
@@ -105,17 +105,17 @@ class MedicalNormalizer:
         # Direct match
         if name in self.key_map:
             return self.key_map[name]
-        
+
         # Fuzzy match using SequenceMatcher
         best_match = None
         highest_score = 0.0
-        
+
         for alias, key in self.key_map.items():
             score = SequenceMatcher(None, name, alias).ratio()
             if score > 0.85 and score > highest_score:
                 highest_score = score
                 best_match = key
-                
+
         return best_match
 
     def validate_range(self, value: float, key: str, gender: str = "male", age_group: str = "adult") -> str:
@@ -123,16 +123,16 @@ class MedicalNormalizer:
         entry = next((item for item in self.reference_data if item["key"] == key), None)
         if not entry:
             return "UNKNOWN"
-        
+
         gender_data = entry.get("ranges", {}).get(gender.lower(), {})
         range_data = gender_data.get(age_group.lower()) or gender_data.get("adult")
-        
+
         if not range_data:
             return "UNKNOWN"
-        
+
         low = range_data.get("low")
         high = range_data.get("high")
-        
+
         if low is not None and value < low:
             return "LOW"
         if high is not None and value > high:
@@ -147,7 +147,7 @@ class MedicalNormalizer:
             "potassium": (1.5, 10.0),
             "mchc": (20.0, 50.0),
         }
-        
+
         if key in safety_bounds:
             low, high = safety_bounds[key]
             if value < low or value > high:
@@ -157,30 +157,30 @@ class MedicalNormalizer:
     def normalize(self, raw_results: List[Dict[str, Any]], gender: str = "male", age_group: str = "adult") -> List[Dict[str, Any]]:
         normalized = []
         seen_keys = {} # For duplicate removal
-        
+
         for res in raw_results:
             test_name = res.get("test_name", "")
             raw_val = res.get("value")
-            
+
             key = self.get_canonical_key(test_name)
             if not key:
                 continue
-                
+
             val = self.clean_ocr_value(str(raw_val))
             if val is None:
                 continue
-                
+
             val = self.fix_scaling(val, key)
-            
+
             # Clinical safety
             warning = self.safety_check(val, key)
-            
+
             # Status
             status = self.validate_range(val, key, gender, age_group)
-            
+
             # Build entry
             entry = next((item for item in self.reference_data if item["key"] == key), {})
-            
+
             processed = {
                 "test_key": key,
                 "display_name": entry.get("display_name", key),
@@ -190,10 +190,10 @@ class MedicalNormalizer:
                 "explanation": entry.get("what_it_measures"),
                 "warning": warning
             }
-            
+
             # Duplicate handling: keep latest (assuming sequential processing)
             seen_keys[key] = processed
-            
+
         return list(seen_keys.values())
 
 # Single function interface as requested

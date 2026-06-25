@@ -1012,6 +1012,50 @@
     "what_it_measures": "Absolute eosinophil count; used to monitor allergy, asthma, and parasitic disease."
   },
   {
+    "key": "basophils_abs",
+    "display_name": "Absolute Basophil Count",
+    "canonical_unit": "x10^3/\u00b5L",
+    "ranges": {
+      "male": {
+        "adult": {
+          "low": 0.0,
+          "high": 0.2
+        },
+        "elderly": {
+          "low": 0.0,
+          "high": 0.2
+        },
+        "teen": {
+          "low": 0.0,
+          "high": 0.2
+        },
+        "child": {
+          "low": 0.0,
+          "high": 0.3
+        }
+      },
+      "female": {
+        "adult": {
+          "low": 0.0,
+          "high": 0.2
+        },
+        "elderly": {
+          "low": 0.0,
+          "high": 0.2
+        },
+        "teen": {
+          "low": 0.0,
+          "high": 0.2
+        },
+        "child": {
+          "low": 0.0,
+          "high": 0.3
+        }
+      }
+    },
+    "what_it_measures": "Absolute number of basophils in the blood; elevated in allergic reactions and myeloproliferative disorders."
+  },
+  {
     "key": "glucose_fasting",
     "display_name": "Fasting Blood Glucose",
     "canonical_unit": "mg/dL",

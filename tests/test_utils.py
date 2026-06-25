@@ -37,6 +37,6 @@ def test_sanitize_dataclass():
 def test_sanitize_unknown_type():
     class Unknown:
         def __str__(self): return "unknown"
-    
+
     obj = Unknown()
     assert sanitize_for_json(obj) == "unknown"

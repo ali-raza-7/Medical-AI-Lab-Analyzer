@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# /usr/bin/env python3
 """Test parsing bugs on real multi-column blood test reports."""
 import sys
 sys.path.insert(0, '/home/dell/Desktop/test')
@@ -81,7 +81,7 @@ def test_parsing():
     
     print(f"\n✓ Parsed {len(results)} tests\n")
     
-    # Expected tests (from the report)
+# Expected tests (from the report)
     expected = {
         "Hemoglobin": (13.2, "g/dL", "13.5 - 17.5"),
         "Total Leukocyte Count": (5.8, "x10^3/µL", "4.5 - 11.0"),
@@ -95,10 +95,10 @@ def test_parsing():
         "RDW-CV": (13.2, "%", "11.5 - 14.5"),
     }
     
-    # Check for parsing issues
+# Check for parsing issues
     print("PARSING ISSUES FOUND:\n")
     
-    # 1. Check for garbage lines parsed as tests
+# 1. Check for garbage lines parsed as tests
     garbage_found = False
     for result in results:
         if "eT ss ecomt" in result.get("test_name", ""):
@@ -110,7 +110,7 @@ def test_parsing():
     
     print()
     
-    # 2. Check for missing tests
+# 2. Check for missing tests
     parsed_names = {r["test_name"] for r in results}
     missing = set(expected.keys()) - parsed_names
     if missing:
@@ -122,7 +122,7 @@ def test_parsing():
     
     print()
     
-    # 3. Check for value/range confusion
+# 3. Check for value/range confusion
     print("  DETAILED CHECKS:")
     for result in results:
         name = result["test_name"]
@@ -133,18 +133,18 @@ def test_parsing():
         if name in expected:
             exp_val, exp_unit, exp_ref = expected[name]
             
-            # Check if value looks like a range (X-Y pattern)
+# Check if value looks like a range (X-Y pattern)
             if isinstance(value, (int, float)) and "-" in str(value):
                 print(f"    ✗ {name}: Value looks like range: {value}")
             
-            # Check unit corruption
+# Check unit corruption
             if unit != exp_unit and name == "Packed Cell Volume":
                 if unit == "aid":
                     print(f"    ✗ {name}: Unit not corrected: 'aid' should be 'g/dL'")
                 elif unit == "g/dL":
                     print(f"    ✓ {name}: Unit corrected from 'aid' to 'g/dL'")
             
-            # Check row alignment (Absolute Neutrophil Count should be 3.41, not 56)
+# Check row alignment (Absolute Neutrophil Count should be 3.41, not 56)
             if name == "Absolute Neutrophil Count":
                 if abs(value - 56) < 0.01:
                     print(f"    ✗ {name}: ROW MISALIGNED - got 56 (Neutrophils %), expected {exp_val}")
@@ -159,7 +159,7 @@ def test_parsing():
     print(f"Tests expected: {len(expected)}")
     print(f"Missing: {len(missing)}")
     
-    # Print all parsed results for visual inspection
+# Print all parsed results for visual inspection
     print("\nFull parsed results:")
     for i, result in enumerate(results, 1):
         print(f"{i:2d}. {result['test_name']:30s} = {result['value']:10.2f} {result.get('unit', ''):15s} ({result.get('reference_range', '')})")

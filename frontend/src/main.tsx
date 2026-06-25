@@ -5,14 +5,16 @@ import { RouterProvider } from "react-router-dom";
 import { router } from "./router";
 import { ThemeProvider } from "./lib/theme";
 import { AuthProvider } from "./lib/AuthContext";
+import { ErrorBoundary } from "./components/ui/ErrorBoundary";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <AuthProvider>
-      <ThemeProvider>
-        <RouterProvider router={router} />
-      </ThemeProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <ThemeProvider>
+          <RouterProvider router={router} />
+        </ThemeProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   </React.StrictMode>,
 );
-

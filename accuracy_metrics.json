@@ -1,0 +1,241 @@
+{
+  "dataset_summary": {
+    "total_reports": 280,
+    "crashed": 52,
+    "success_rate_pct": 81.43
+  },
+  "stage_1_ocr": {
+    "total_reports": 280,
+    "cer_pct": 12.15,
+    "wer_pct": 72.68,
+    "missing_lines": 8,
+    "extra_lines": 0,
+    "digit_accuracy_pct": 51.24179642259683
+  },
+  "stage_2_name_recognition": {
+    "true_positives": 1530,
+    "false_positives": 0,
+    "false_negatives": 781,
+    "true_negatives": 0,
+    "precision_pct": 100.0,
+    "recall_pct": 66.21,
+    "f1_pct": 79.67,
+    "specificity_pct": 0.0,
+    "accuracy_pct": 66.21
+  },
+  "stage_3_value_extraction": {
+    "exact_match": {
+      "total": 2311,
+      "correct": 1412,
+      "errors": 899,
+      "skipped": 0,
+      "accuracy_pct": 61.1,
+      "error_rate_pct": 38.9
+    },
+    "mean_abs_error": 2546.8943,
+    "median_abs_error": 55.35,
+    "mean_rel_error_pct": 7990.46,
+    "decimal_errors": 22,
+    "digit_losses": 63,
+    "digit_additions": 12
+  },
+  "stage_4_unit_recognition": {
+    "total": 2311,
+    "correct": 1478,
+    "errors": 833,
+    "skipped": 0,
+    "accuracy_pct": 63.95,
+    "error_rate_pct": 36.05
+  },
+  "stage_5_ref_range": {
+    "total": 1531,
+    "correct": 1531,
+    "errors": 0,
+    "skipped": 0,
+    "accuracy_pct": 100.0,
+    "error_rate_pct": 0.0
+  },
+  "stage_6_normalization": {
+    "total": 1531,
+    "correct": 1520,
+    "errors": 11,
+    "skipped": 0,
+    "accuracy_pct": 99.28,
+    "error_rate_pct": 0.72
+  },
+  "stage_7_classification": {
+    "matrix": {
+      "normal": {
+        "normal": 826,
+        "high": 51,
+        "low": 26,
+        "unknown": 460
+      },
+      "high": {
+        "normal": 50,
+        "high": 273,
+        "low": 11,
+        "unknown": 165
+      },
+      "low": {
+        "normal": 50,
+        "high": 6,
+        "low": 237,
+        "unknown": 156
+      },
+      "unknown": {
+        "normal": 0,
+        "high": 0,
+        "low": 0,
+        "unknown": 0
+      }
+    },
+    "accuracy_pct": 57.81
+  },
+  "stage_8_abnormal_detection": {
+    "true_positives": 527,
+    "false_positives": 77,
+    "false_negatives": 421,
+    "true_negatives": 826,
+    "precision_pct": 87.25,
+    "recall_pct": 55.59,
+    "f1_pct": 67.91,
+    "specificity_pct": 91.47,
+    "accuracy_pct": 73.1
+  },
+  "stage_9_ai_summary": {
+    "medical_correctness": 9.17,
+    "hallucination_rate": 9.17,
+    "missing_findings": 9.17,
+    "false_findings": 9.17,
+    "consistency": 9.17,
+    "readability": 7.36,
+    "completeness": 9.17,
+    "overall": 89.12
+  },
+  "stage_10_end_to_end": {
+    "total": 280,
+    "correct": 228,
+    "errors": 52,
+    "skipped": 0,
+    "accuracy_pct": 81.43,
+    "error_rate_pct": 18.57
+  },
+  "timings": {
+    "ocr": {
+      "min": 0,
+      "max": 0,
+      "mean": 0.0,
+      "median": 0.0
+    },
+    "pipeline": {
+      "min": 0.001,
+      "max": 0.195,
+      "mean": 0.042,
+      "median": 0.034
+    },
+    "ai": {
+      "min": 0,
+      "max": 0,
+      "mean": 0.0,
+      "median": 0.0
+    },
+    "total": {
+      "min": 0.001,
+      "max": 0.195,
+      "mean": 0.042,
+      "median": 0.034
+    }
+  },
+  "error_analysis": {
+    "total_errors": 52,
+    "distribution": {
+      "OCR Error": 0,
+      "Parser Error": 0,
+      "Resolution Error": 0,
+      "Normalization Error": 0,
+      "Clinical KB Error": 0,
+      "AI Hallucination": 0,
+      "Missing Definition": 0,
+      "Wrong Reference Range": 0,
+      "Cache Issue": 0,
+      "Frontend Error": 0,
+      "Backend Error": 52,
+      "Unit Error": 0,
+      "Value Extraction Error": 0,
+      "Classification Error": 0
+    },
+    "distribution_pct": {
+      "OCR Error": 0.0,
+      "Parser Error": 0.0,
+      "Resolution Error": 0.0,
+      "Normalization Error": 0.0,
+      "Clinical KB Error": 0.0,
+      "AI Hallucination": 0.0,
+      "Missing Definition": 0.0,
+      "Wrong Reference Range": 0.0,
+      "Cache Issue": 0.0,
+      "Frontend Error": 0.0,
+      "Backend Error": 100.0,
+      "Unit Error": 0.0,
+      "Value Extraction Error": 0.0,
+      "Classification Error": 0.0
+    }
+  },
+  "per_type_accuracy": {
+    "CBC": {
+      "mean": 100.0,
+      "count": 40
+    },
+    "Lipid Profile": {
+      "mean": 90.0,
+      "count": 40
+    },
+    "Liver Function": {
+      "mean": 100.0,
+      "count": 1
+    },
+    "Kidney Function": {
+      "mean": 100.0,
+      "count": 40
+    },
+    "Diabetes": {
+      "mean": 87.5,
+      "count": 40
+    },
+    "Thyroid": {
+      "mean": 60.0,
+      "count": 30
+    },
+    "Mixed": {
+      "mean": 100.0,
+      "count": 37
+    }
+  },
+  "per_quality_accuracy": {
+    "clean": {
+      "mean": 100.0,
+      "count": 60
+    },
+    "standard": {
+      "mean": 98.15,
+      "count": 54
+    },
+    "low": {
+      "mean": 79.31,
+      "count": 29
+    },
+    "mobile": {
+      "mean": 77.78,
+      "count": 27
+    },
+    "rotated": {
+      "mean": 75.86,
+      "count": 29
+    },
+    "pdf": {
+      "mean": 96.55,
+      "count": 29
+    }
+  }
+}

@@ -11,7 +11,6 @@ Exit codes:
 import os
 import sys
 
-# ── 1. Load .env ──────────────────────────────────────────────────────────────
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -20,7 +19,6 @@ except ImportError:
     print("[1] ✗ python-dotenv not installed — run: pip install python-dotenv")
     sys.exit(1)
 
-# ── 2. Check API key ──────────────────────────────────────────────────────────
 api_key = os.getenv("GROQ_API_KEY", "").strip()
 
 if not api_key:
@@ -41,7 +39,6 @@ if not api_key.startswith("gsk_"):
 else:
     print(f"[2] ✓ GROQ_API_KEY found — starts with: {api_key[:8]}... (length: {len(api_key)})")
 
-# ── 3. Initialize Groq client ─────────────────────────────────────────────────
 try:
     from groq import Groq
     client = Groq(api_key=api_key)
@@ -53,7 +50,6 @@ except Exception as e:
     print(f"[3] ✗ Groq client initialization failed: {e}")
     sys.exit(1)
 
-# ── 4. Make a real API call ───────────────────────────────────────────────────
 print("[4] Making test API call to Groq (model: llama-3.3-70b-versatile)...")
 try:
     response = client.chat.completions.create(
@@ -88,7 +84,6 @@ except Exception as e:
         print("    → Check https://console.groq.com for service status")
     sys.exit(1)
 
-# ── 5. Summary ────────────────────────────────────────────────────────────────
 print()
 print("=" * 55)
 print("  ✅ ALL CHECKS PASSED — Groq API is working correctly!")

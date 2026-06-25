@@ -1,21 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
 import { api } from '../api';
-
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        id: {
-          initialize: (config: any) => void;
-          renderButton: (element: HTMLElement, config: any) => void;
-          prompt: () => void;
-        };
-      };
-    };
-  }
-}
+import { GoogleLoginButton } from '../components/ui/GoogleLoginButton';
+import type { GoogleProfile } from '../lib/useGoogleAuth';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
@@ -24,83 +12,49 @@ const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
-  const { login } = useAuth();
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const { login, setUserPicture } = useAuth();
   const navigate = useNavigate();
 
-  const handleGoogleCallback = useCallback(async (response: any) => {
-    setGoogleLoading(true);
-    setError('');
-    try {
-      const res = await api.post('/auth/google', { credential: response.credential });
-      await login(res.data.access_token);
-      navigate('/');
-    } catch (err: any) {
-      const detail = err.response?.data?.detail;
-      setError(typeof detail === 'string' ? detail : 'Google sign-in failed. Please try email login.');
-    } finally {
-      setGoogleLoading(false);
-    }
-  }, [login, navigate]);
+  const onGoogleSuccess = async (token: string, profile: GoogleProfile) => {
+    if (profile.picture) setUserPicture(profile.picture);
+    await login(token);
+    navigate('/');
+  };
 
-  useEffect(() => {
-    if (!GOOGLE_CLIENT_ID) return;
+  const validateEmail = (value: string): string => {
+    if (!value.trim()) return 'Email is required';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return 'Please enter a valid email address';
+    return '';
+  };
 
-    // Load Google Identity Services script
-    const existingScript = document.getElementById('google-gsi-script');
-    if (existingScript) {
-      // Script already loaded, just initialize
-      initializeGoogle();
-      return;
-    }
+  const validatePassword = (value: string): string => {
+    if (!value.trim()) return 'Password is required';
+    return '';
+  };
 
-    const script = document.createElement('script');
-    script.id = 'google-gsi-script';
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    script.onload = () => initializeGoogle();
-    document.body.appendChild(script);
+  const getErrorMessage = (raw: string): string => {
+    if (raw.includes('Invalid email or password')) return 'Invalid email or password';
+    if (raw.includes('verify your email')) return 'Please verify your email before logging in';
+    if (raw.includes('locked')) return 'Account temporarily locked due to too many failed attempts. Try again later.';
+    if (raw.includes('rate limit')) return 'Too many login attempts. Please wait a moment.';
+    return raw;
+  };
 
-    function initializeGoogle() {
-      if (!window.google) return;
-      window.google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: handleGoogleCallback,
-      });
-      const btnContainer = document.getElementById('google-signin-btn');
-      if (btnContainer) {
-        window.google.accounts.id.renderButton(btnContainer, {
-          type: 'standard',
-          theme: 'outline',
-          size: 'large',
-          width: '100%',
-          text: 'continue_with',
-          shape: 'pill',
-          logo_alignment: 'left',
-        });
-      }
-    }
-  }, [handleGoogleCallback]);
+  const handleEmailBlur = () => setEmailError(validateEmail(email));
+  const handlePasswordBlur = () => setPasswordError(validatePassword(password));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    
-    // Frontend validation
-    if (!email || !email.trim()) {
-      setError('Email is required');
-      return;
-    }
-    if (!email.includes('@') || !email.includes('.')) {
-      setError('Please enter a valid email address');
-      return;
-    }
-    if (!password || !password.trim()) {
-      setError('Password is required');
-      return;
-    }
-    
+
+    const errE = validateEmail(email);
+    const errP = validatePassword(password);
+    setEmailError(errE);
+    setPasswordError(errP);
+    if (errE || errP) return;
+
     setLoading(true);
     try {
       const formData = new FormData();
@@ -112,9 +66,10 @@ const LoginPage: React.FC = () => {
       }
       await login(res.data.access_token);
       navigate('/');
-    } catch (err: any) {
-      const detail = err.response?.data?.detail;
-      setError(typeof detail === 'string' ? detail : 'Login failed. Please check your credentials.');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { detail?: unknown } } };
+      const detail = axiosErr.response?.data?.detail;
+      setError(getErrorMessage(typeof detail === 'string' ? detail : 'Login failed. Please check your credentials.'));
     } finally {
       setLoading(false);
     }
@@ -124,65 +79,88 @@ const LoginPage: React.FC = () => {
     <div className="flex items-center justify-center min-h-[60vh]">
       <div className="w-full max-w-md p-8 space-y-6 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-center text-slate-800 dark:text-white">Welcome Back</h2>
-        {error && <div className="p-3 text-sm text-red-500 bg-red-100 dark:bg-red-900/30 rounded-lg">{error}</div>}
-        
-        {/* Google Sign In */}
-        {GOOGLE_CLIENT_ID && (
-          <>
-            <div className="flex flex-col items-center gap-3">
-              {googleLoading ? (
-                <div className="w-full flex items-center justify-center py-3 gap-2 text-sm text-slate-500 bg-slate-50 dark:bg-slate-800 rounded-xl">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500/20 border-t-emerald-500" />
-                  Signing in with Google...
-                </div>
-              ) : (
-                <div id="google-signin-btn" className="w-full flex justify-center" />
-              )}
-            </div>
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-slate-200 dark:border-slate-700" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-white dark:bg-slate-900 px-3 text-slate-400 font-medium">or continue with email</span>
-              </div>
-            </div>
-          </>
+
+        {error && (
+          <div className="p-3 text-sm text-red-500 bg-red-100 dark:bg-red-900/30 rounded-lg" role="alert">
+            {error}
+          </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Email</label>
+            <label htmlFor="login-email" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+              Email
+            </label>
             <input
+              id="login-email"
               type="email"
               required
               disabled={loading}
               className="w-full px-4 py-2 mt-1 border border-slate-300 rounded-xl bg-white text-slate-900 placeholder-slate-400 dark:bg-slate-800 dark:border-slate-600 dark:text-white dark:placeholder-slate-500 focus:ring-2 focus:ring-emerald-500 outline-none disabled:opacity-50"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => { setEmail(e.target.value); setEmailError(''); }}
+              onBlur={handleEmailBlur}
               placeholder="your@email.com"
+              aria-invalid={!!emailError}
+              aria-describedby={emailError ? 'login-email-error' : undefined}
             />
+            {emailError && <p id="login-email-error" className="mt-1 text-xs text-red-500" role="alert">{emailError}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Password</label>
+            <label htmlFor="login-password" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+              Password
+            </label>
             <input
+              id="login-password"
               type="password"
               required
               disabled={loading}
               className="w-full px-4 py-2 mt-1 border border-slate-300 rounded-xl bg-white text-slate-900 placeholder-slate-400 dark:bg-slate-800 dark:border-slate-600 dark:text-white dark:placeholder-slate-500 focus:ring-2 focus:ring-emerald-500 outline-none disabled:opacity-50"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => { setPassword(e.target.value); setPasswordError(''); }}
+              onBlur={handlePasswordBlur}
               placeholder="••••••••"
+              aria-invalid={!!passwordError}
+              aria-describedby={passwordError ? 'login-password-error' : undefined}
             />
+            {passwordError && <p id="login-password-error" className="mt-1 text-xs text-red-500" role="alert">{passwordError}</p>}
+          </div>
+          <div className="flex justify-end">
+            <Link to="/forgot-password" className="text-xs text-emerald-500 hover:text-emerald-600 font-medium">
+              Forgot Password?
+            </Link>
           </div>
           <button
             type="submit"
             disabled={loading}
             className="w-full py-3 font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/30 disabled:opacity-50 flex items-center justify-center"
+            aria-label="Sign in to your account"
           >
-            {loading ? <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-white" /> : 'Sign In'}
+            {loading ? (
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-white" role="status" aria-label="Signing in" />
+            ) : 'Sign In'}
           </button>
         </form>
+
+        {GOOGLE_CLIENT_ID && (
+          <>
+            <div className="relative" role="separator" aria-orientation="horizontal">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-slate-200 dark:border-slate-700" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-white dark:bg-slate-900 px-3 text-slate-400 font-medium">or sign in with Google</span>
+              </div>
+            </div>
+            <GoogleLoginButton
+              clientId={GOOGLE_CLIENT_ID}
+              onSuccess={onGoogleSuccess}
+              onError={setError}
+              mode="signin"
+            />
+          </>
+        )}
+
         <p className="text-sm text-center text-slate-600 dark:text-slate-400">
           Don't have an account? <Link to="/signup" className="text-emerald-500 hover:underline">Sign up</Link>
         </p>

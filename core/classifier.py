@@ -1,19 +1,8 @@
-"""
-Classifier with 3-tier fallback — UNKNOWN is a last resort only.
-
-Priority:
-  1. classify_numeric()  — when value + low/high are all known floats
-  2. classify_with_range_str() — parses range string first
-  3. Both guarantee: if value and range exist → never UNKNOWN
-"""
+"""Classifier with 3-tier fallback — UNKNOWN is a last resort only"""
 from __future__ import annotations
-
 import logging
-
 from core.normalization import ParsedRange, parse_reference_range
-
 logger = logging.getLogger(__name__)
-
 
 def _classify_against_parsed(value: float, pr: ParsedRange) -> str:
     """
@@ -34,8 +23,6 @@ def _classify_against_parsed(value: float, pr: ParsedRange) -> str:
         return "high" if value > pr.high else "normal"
 
     return "unknown"                 # genuinely no range info
-
-
 def classify(value: float, range_str: str, default_unit: str = "") -> str:
     """
     Classify value against a range string.
@@ -53,8 +40,6 @@ def classify(value: float, range_str: str, default_unit: str = "") -> str:
     except Exception as exc:
         logger.error("[classify] exception: %s — value=%s range=%r", exc, value, range_str)
         return "unknown"
-
-
 def classify_numeric(value: float, low: float, high: float) -> str:
     """
     Classify directly against numeric bounds.
@@ -64,7 +49,7 @@ def classify_numeric(value: float, low: float, high: float) -> str:
     if low is None or high is None:
         logger.warning("[classify_numeric] bounds missing: low=%s high=%s — cannot classify", low, high)
         return "unknown"
-    
+
     if value < low:
         return "low"
     if value > high:

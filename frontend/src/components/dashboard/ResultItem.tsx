@@ -1,7 +1,9 @@
+import { memo, useState } from "react";
 import { motion } from "framer-motion";
 import { AlertCircle } from "lucide-react";
 import { Badge } from "../ui/badge";
-import { AnalyzeResultItem } from "../../types";
+import { RangeBarModal } from "./RangeBarModal";
+import type { AnalyzeResultItem } from "../../types";
 
 interface ResultItemProps {
   result: AnalyzeResultItem;
@@ -16,14 +18,22 @@ function badgeVariant(status: string): "normal" | "high" | "low" | "unknown" {
   return "unknown";
 }
 
-export function ResultItem({ result, index }: ResultItemProps) {
+export const ResultItem = memo(function ResultItem({ result, index }: ResultItemProps) {
+  const [showModal, setShowModal] = useState(false);
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05 }}
-      className="group rounded-xl border border-slate-200 bg-white p-5 transition hover:border-slate-300 hover:shadow-md dark:border-[#1e293b] dark:bg-[#0f172a] dark:hover:border-[#334155] dark:hover:shadow-lg"
-    >
+    <>
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: index * 0.05 }}
+        className="group cursor-pointer rounded-xl border border-slate-200 bg-white p-5 transition hover:border-slate-300 hover:shadow-md dark:border-[#1e293b] dark:bg-[#0f172a] dark:hover:border-[#334155] dark:hover:shadow-lg"
+        role="button"
+        tabIndex={0}
+        onClick={() => setShowModal(true)}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setShowModal(true); } }}
+        aria-label={`Test result: ${result.test_name} is ${result.status}. Click for details.`}
+      >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
           <div className="text-sm font-bold text-slate-900 group-hover:text-[#14b8a6] transition-colors dark:text-white">
@@ -73,7 +83,7 @@ export function ResultItem({ result, index }: ResultItemProps) {
               )}
               {result.clinical_insight.severity_comment && (
                 <div className="flex items-center gap-1.5 text-[10px] font-bold text-red-500 dark:text-red-400">
-                  <AlertCircle className="h-3 w-3" />
+                  <AlertCircle className="h-3 w-3" aria-hidden="true" />
                   {result.clinical_insight.severity_comment}
                 </div>
               )}
@@ -82,5 +92,13 @@ export function ResultItem({ result, index }: ResultItemProps) {
         </div>
       )}
     </motion.div>
+
+      {showModal && (
+        <RangeBarModal
+          result={result}
+          onClose={() => setShowModal(false)}
+        />
+      )}
+    </>
   );
-}
+});

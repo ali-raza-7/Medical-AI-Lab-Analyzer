@@ -468,6 +468,95 @@ INSIGHTS_KB = {
             "gender_context": {}
         }
     },
+    "rdw_sd": {
+        "high": {
+            "causes": [
+                "Iron deficiency (early stage)",
+                "B12 or Folate deficiency",
+                "Recent blood loss or hemolysis",
+                "Mixed anemia"
+            ],
+            "next_steps": [
+                "Check iron panel (Ferritin, TIBC, serum iron)",
+                "Check B12 and Folate levels",
+                "Correlate with MCV and MCH"
+            ],
+            "age_context": {
+                "young": "In young adults, iron deficiency from diet or blood loss is common."
+            },
+            "gender_context": {
+                "female": "Menstrual blood loss is a common cause of iron deficiency in premenopausal females."
+            }
+        },
+        "low": {
+            "causes": [
+                "Normal variant (uniform cell size)"
+            ],
+            "next_steps": [
+                "No specific action required"
+            ],
+            "age_context": {},
+            "gender_context": {}
+        }
+    },
+    "mpv": {
+        "high": {
+            "causes": [
+                "Increased platelet destruction (e.g., ITP)",
+                "Inflammatory conditions",
+                "Recovery from bone marrow suppression",
+                "Bleeding"
+            ],
+            "next_steps": [
+                "Review platelet count trend",
+                "Assess for inflammatory markers (CRP/ESR)",
+                "Peripheral smear if persistent"
+            ],
+            "age_context": {},
+            "gender_context": {}
+        },
+        "low": {
+            "causes": [
+                "Bone marrow disorders (e.g., aplastic anemia)",
+                "Chemotherapy or radiation",
+                "Chronic inflammation"
+            ],
+            "next_steps": [
+                "Review full CBC with platelet parameters",
+                "Assess bone marrow function if persistent",
+                "Correlate with platelet count"
+            ],
+            "age_context": {},
+            "gender_context": {}
+        }
+    },
+    "pdw": {
+        "high": {
+            "causes": [
+                "Increased platelet turnover",
+                "Inflammatory conditions",
+                "Iron deficiency",
+                "Correlates with high MPV"
+            ],
+            "next_steps": [
+                "Repeat CBC with platelet parameters",
+                "Check iron studies",
+                "Review clinical signs of inflammation"
+            ],
+            "age_context": {},
+            "gender_context": {}
+        },
+        "low": {
+            "causes": [
+                "Normal variant (uniform platelet size)"
+            ],
+            "next_steps": [
+                "No specific action required"
+            ],
+            "age_context": {},
+            "gender_context": {}
+        }
+    },
     "esr": {
         "high": {
             "causes": [

@@ -1,0 +1,79 @@
+services:
+  celery:
+    build: .
+    command: celery -A core.celery_app worker --loglevel=info
+    container_name: medical_celery
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://med_user:strong_password@postgres:5432/medical_db
+      REDIS_URL: redis://redis:6379/0
+    mem_limit: 2g
+    restart: unless-stopped
+  fastapi:
+    build: .
+    container_name: medical_api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://med_user:strong_password@postgres:5432/medical_db
+      REDIS_URL: redis://redis:6379/0
+    healthcheck:
+      interval: 30s
+      retries: 3
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost:8000/health
+      timeout: 10s
+    mem_limit: 2g
+    ports:
+    - 8000:8000
+    restart: unless-stopped
+  postgres:
+    container_name: medical_postgres
+    environment:
+      POSTGRES_DB: medical_db
+      POSTGRES_PASSWORD: strong_password
+      POSTGRES_USER: med_user
+    healthcheck:
+      interval: 5s
+      retries: 5
+      test:
+      - CMD-SHELL
+      - pg_isready -U med_user -d medical_db
+      timeout: 5s
+    image: postgres:16-alpine
+    mem_limit: 512m
+    ports:
+    - 5433:5432
+    volumes:
+    - pgdata:/var/lib/postgresql/data
+  redis:
+    container_name: medical_redis
+    healthcheck:
+      interval: 5s
+      retries: 5
+      test:
+      - CMD
+      - redis-cli
+      - ping
+      timeout: 3s
+    image: redis:7-alpine
+    mem_limit: 256m
+    ports:
+    - 6380:6379
+    volumes:
+    - redis_data:/data
+volumes:
+  pgdata: null
+  redis_data: null

@@ -63,17 +63,17 @@ def embed_text(text: str) -> Optional[np.ndarray]:
     """
     if not text or not isinstance(text, str):
         return None
-    
+
     model = get_embedding_model()
     if model is None:
         logger.warning("[embeddings] model not loaded, cannot embed text")
         return None
-    
+
     try:
         text = text.strip()
         if not text:
             return None
-        
+
         # Encode (internal normalization)
         embedding = model.encode(text, convert_to_numpy=True, normalize_embeddings=True)
         return embedding.astype(np.float32)
@@ -88,12 +88,12 @@ def embed_texts_batch(texts: list[str]) -> list[Optional[np.ndarray]]:
     """
     if not texts:
         return []
-    
+
     model = get_embedding_model()
     if model is None:
         logger.warning("[embeddings] model not loaded, cannot embed batch")
         return [None] * len(texts)
-    
+
     try:
         # Filter out empty texts but track their indices
         valid_texts = []
@@ -104,19 +104,19 @@ def embed_texts_batch(texts: list[str]) -> list[Optional[np.ndarray]]:
                 if text:
                     valid_texts.append(text)
                     indices_map.append(i)
-        
+
         if not valid_texts:
             return [None] * len(texts)
-        
+
         # Embed all valid texts with normalization
         embeddings_array = model.encode(valid_texts, convert_to_numpy=True, normalize_embeddings=True)
         embeddings_array = embeddings_array.astype(np.float32)
-        
+
         # Map back to original indices
         result = [None] * len(texts)
         for i, emb in enumerate(embeddings_array):
             result[indices_map[i]] = emb
-        
+
         return result
     except Exception as exc:
         logger.error("[embeddings] batch embedding failed: %s", exc)
@@ -124,30 +124,21 @@ def embed_texts_batch(texts: list[str]) -> list[Optional[np.ndarray]]:
 
 
 def similarity_score(embedding1: np.ndarray, embedding2: np.ndarray) -> float:
-    """
-    Compute cosine similarity between two embeddings.
-    
-    Args:
-        embedding1: First embedding vector
-        embedding2: Second embedding vector
-        
-    Returns:
-        Similarity score in range [0, 1]
-    """
+    """Compute cosine similarity between two embeddings"""
     if embedding1 is None or embedding2 is None:
         return 0.0
-    
+
     try:
         # Normalize vectors
         e1 = embedding1.astype(np.float64)
         e2 = embedding2.astype(np.float64)
-        
+
         norm1 = np.linalg.norm(e1)
         norm2 = np.linalg.norm(e2)
-        
+
         if norm1 == 0 or norm2 == 0:
             return 0.0
-        
+
         # Cosine similarity
         similarity = np.dot(e1, e2) / (norm1 * norm2)
         return float(np.clip(similarity, 0.0, 1.0))

@@ -29,8 +29,6 @@ class LabResult:
     unit_normalized: Optional[str] = None
 
 
-# ── helpers ───────────────────────────────────────────────────────────────────
-
 def _is_low(r: LabResult) -> bool:  return r.status == "low"
 def _is_high(r: LabResult) -> bool: return r.status == "high"
 def _is_ab(r: LabResult) -> bool:   return r.status in ("low", "high")
@@ -49,7 +47,7 @@ def _ab_count(results: list[LabResult]) -> int:
     return sum(1 for r in results if _is_ab(r))
 
 
-# ── RAG LAYER: centralized pattern retrieval helpers ──────────────────────────
+# RAG LAYER: centralized pattern retrieval helpers
 # SEMANTIC RETRIEVAL: vector similarity search for clinical patterns
 
 def _get_vector_store():
@@ -64,22 +62,15 @@ def _get_vector_store():
 
 
 def get_applicable_patterns_for_test(test_key: str) -> list[dict]:
-    """
-    Retrieve patterns applicable to this test from centralized KB.
-    
-    USES SEMANTIC RETRIEVAL:
-    - First attempts vector similarity search if available
-    - Falls back to deterministic rule-based matches
-    - Returns enriched pattern metadata for clinical context
-    """
-    # Tier 1: Try semantic search
+    """Retrieve patterns applicable to this test from centralized KB"""
+# Tier 1: Try semantic search
     semantic_patterns = _retrieve_patterns_semantic(test_key)
     if semantic_patterns:
-        logger.debug("[insights] retrieved %d patterns via semantic search for %s", 
+        logger.debug("[insights] retrieved %d patterns via semantic search for %s",
                     len(semantic_patterns), test_key)
         return semantic_patterns
-    
-    # Tier 2: Fall back to rule-based retrieval
+
+# Tier 2: Fall back to rule-based retrieval
     logger.debug("[insights] falling back to rule-based pattern retrieval for %s", test_key)
     pattern_ids = get_patterns_for_test(test_key)
     return [
@@ -97,33 +88,33 @@ def get_applicable_patterns_for_test(test_key: str) -> list[dict]:
 def _retrieve_patterns_semantic(test_key: str) -> list[dict]:
     """
     Retrieve clinical patterns using semantic similarity search.
-    
+
     Returns:
         List of pattern dicts (enriched metadata) or empty list if search unavailable
     """
     store = _get_vector_store()
     if store is None:
         return []
-    
+
     try:
-        # Search for patterns related to this test
+# Search for patterns related to this test
         query = f"test: {test_key} clinical patterns"
         results = store.search(query, k=5, threshold=0.5)
-        
+
         if not results:
             logger.debug("[insights] semantic search found no patterns for %s", test_key)
             return []
-        
-        # Extract pattern IDs from results and build result list
+
+# Extract pattern IDs from results and build result list
         retrieved_patterns = []
         seen_ids = set()
-        
+
         for doc_id, score in results:
-            # Extract pattern ID from doc_id (format: "pattern_<pattern_id>" or "pattern_keywords_<pattern_id>")
+# Extract pattern ID from doc_id (format: "pattern_<pattern_id>" or "pattern_keywords_<pattern_id>")
             if "pattern_" in doc_id:
                 pid = doc_id.replace("pattern_keywords_", "").replace("pattern_", "")
-                
-                # Avoid duplicates and ensure pattern exists
+
+# Avoid duplicates and ensure pattern exists
                 if pid not in seen_ids and pid in PATTERN_BY_ID:
                     seen_ids.add(pid)
                     pattern = PATTERN_BY_ID[pid]
@@ -135,11 +126,11 @@ def _retrieve_patterns_semantic(test_key: str) -> list[dict]:
                         "possible_causes": pattern.possible_causes,
                         "semantic_score": round(score, 3),  # Include retrieval score
                     })
-        
-        logger.debug("[insights] semantic search returned %d patterns for %s", 
+
+        logger.debug("[insights] semantic search returned %d patterns for %s",
                     len(retrieved_patterns), test_key)
         return retrieved_patterns
-    
+
     except Exception as exc:
         logger.warning("[insights] semantic pattern retrieval failed for %s: %s", test_key, exc)
         return []
@@ -231,7 +222,7 @@ def generate_clinical_insight(
     kb_entry = INSIGHTS_KB.get(test_key)
     if not kb_entry:
         for k, v in INSIGHTS_KB.items():
-            if test_name.lower() in k.lower():
+            if test_name.lower() in k.lower() or k.lower() in test_key.lower():
                 kb_entry = v
                 break
 
@@ -284,10 +275,10 @@ def generate_grouped_insights(results: list[LabResult]) -> dict:
     Generate insights grouped by clinical category.
     Returns dict with both category-grouped flags and patterns.
     """
-    # Get pattern insights (existing function)
+# Get pattern insights (existing function)
     patterns = generate_insights(results)
 
-    # Build category grouping
+# Build category grouping
     by_category = {
         "CBC": [],
         "Differential": [],
@@ -309,7 +300,7 @@ def generate_grouped_insights(results: list[LabResult]) -> dict:
                 if flag not in by_category[cat]:
                     by_category[cat].append(flag)
 
-    # Remove empty categories
+# Remove empty categories
     by_category = {k: v for k, v in by_category.items() if v}
 
     return {
@@ -318,7 +309,7 @@ def generate_grouped_insights(results: list[LabResult]) -> dict:
     }
 
 
-# ── Internal Pattern Handlers ───────────────────────────────────────────────
+# Internal Pattern Handlers
 
 def _get_anemia_patterns(results: list[LabResult], insights: list[str]):
     hb    = _find(results, "hemoglobin")
@@ -500,7 +491,7 @@ def _get_organ_patterns(results: list[LabResult], insights: list[str]):
     b12   = _find(results, "vitamin_b12")
     plt   = _find(results, "platelets")
 
-    # Kidney
+# Kidney
     if crea and urea and _is_high(crea) and _is_high(urea):
         insights.append(
             "🔴 Pattern: High Creatinine + High Urea — may indicate reduced kidney function "
@@ -513,7 +504,7 @@ def _get_organ_patterns(results: list[LabResult], insights: list[str]):
             "Causes include dehydration, kidney disease, or medication effects."
         )
 
-    # Liver
+# Liver
     if alt and ast and _is_high(alt) and _is_high(ast):
         if alt.value > 3 * 56 or ast.value > 3 * 40:
             insights.append(
@@ -543,7 +534,7 @@ def _get_organ_patterns(results: list[LabResult], insights: list[str]):
             "Causes include liver disease, bile duct obstruction, or hemolysis."
         )
 
-    # Thyroid
+# Thyroid
     if tsh and _is_high(tsh) and t4 and _is_low(t4):
         insights.append(
             "🔴 Pattern: High TSH + Low Free T4 — classic hypothyroidism (underactive thyroid). "
@@ -567,7 +558,7 @@ def _get_organ_patterns(results: list[LabResult], insights: list[str]):
             "A Free T3/T4 panel can help clarify. Symptoms: palpitations, heat intolerance."
         )
 
-    # Electrolytes & Vitamins
+# Electrolytes & Vitamins
     if k and _is_high(k):
         insights.append(
             "🔴 High potassium (hyperkalemia) — can affect heart rhythm. "
@@ -600,7 +591,7 @@ def _get_organ_patterns(results: list[LabResult], insights: list[str]):
             "B12 supplementation or dietary changes are commonly recommended."
         )
 
-    # Platelets
+# Platelets
     if plt and _is_low(plt):
         if plt.value_normalized is not None and plt.value_normalized < 50000:
             insights.append(
@@ -618,6 +609,84 @@ def _get_organ_patterns(results: list[LabResult], insights: list[str]):
             "Can occur with iron deficiency, infection, or inflammatory states."
         )
 
+def _get_cbc_individual_patterns(results: list[LabResult], insights: list[str]):
+    """Single-test fallback patterns for CBC tests when combined patterns can't trigger."""
+    rdw_sd  = _find(results, "rdw_sd")
+    rdw     = _find(results, "rdw")
+    pdw     = _find(results, "pdw")
+    mpv     = _find(results, "mpv")
+    hct     = _find(results, "hematocrit")
+    hb      = _find(results, "hemoglobin")
+    mcv     = _find(results, "mcv")
+    mch     = _find(results, "mch")
+    mchc    = _find(results, "mchc")
+    plt     = _find(results, "platelets")
+    wbc     = _find(results, "wbc")
+    rbc     = _find(results, "rbc")
+
+    if rdw_sd and _is_high(rdw_sd) and not hb:
+        insights.append(
+            "⚠️ High RDW-SD — red blood cells vary significantly in size (anisocytosis). "
+            "This can occur in iron deficiency, B12/folate deficiency, or early-stage anemia. "
+            "Iron studies and B12 levels may help identify the cause."
+        )
+    if pdw and _is_high(pdw):
+        insights.append(
+            "⚠️ High PDW — platelet size variation is increased. "
+            "Often associated with higher platelet turnover, inflammation, or iron deficiency. "
+            "May correlate with MPV findings."
+        )
+    if mpv and _is_high(mpv):
+        insights.append(
+            "⚠️ High MPV — platelets are larger than average, which may indicate "
+            "increased platelet destruction or production. "
+            "Common in immune thrombocytopenia or inflammatory conditions."
+        )
+    if mpv and _is_low(mpv):
+        insights.append(
+            "⚠️ Low MPV — platelets are smaller than average, which can be seen in "
+            "bone marrow disorders or chronic inflammation."
+        )
+    if hct and _is_low(hct) and not hb:
+        insights.append(
+            "⚠️ Low hematocrit — the proportion of red blood cells in your blood is reduced. "
+            "This often indicates anemia. Common causes include iron deficiency, "
+            "blood loss, or chronic disease. A hemoglobin test can confirm."
+        )
+    if rbc and _is_low(rbc) and not hb:
+        insights.append(
+            "⚠️ Low RBC count — your body is producing fewer red blood cells than normal. "
+            "This may be due to anemia, blood loss, or nutritional deficiencies."
+        )
+    if mcv and _is_low(mcv) and not hb:
+        insights.append(
+            "⚠️ Low MCV — red blood cells are smaller than normal (microcytosis). "
+            "This is commonly seen in iron deficiency or thalassemia trait. "
+            "Iron studies and hemoglobin electrophoresis may help."
+        )
+    if mcv and _is_high(mcv) and not hb:
+        insights.append(
+            "⚠️ High MCV — red blood cells are larger than normal (macrocytosis). "
+            "Common causes include B12/folate deficiency, liver disease, or medications. "
+            "B12 and folate levels are recommended."
+        )
+    if mch and _is_low(mch) and not hb:
+        insights.append(
+            "⚠️ Low MCH — red blood cells contain less hemoglobin than normal (hypochromia). "
+            "Often seen with iron deficiency or thalassemia."
+        )
+    if mchc and _is_low(mchc) and not hb:
+        insights.append(
+            "⚠️ Low MCHC — reduced hemoglobin concentration in red blood cells. "
+            "May indicate iron deficiency anemia or other hemoglobinopathies."
+        )
+    if wbc and _is_high(wbc) and not (_find(results, "neutrophils_pct") or _find(results, "lymphocytes_pct")):
+        insights.append(
+            "⚠️ High WBC count (leukocytosis) — may indicate infection, inflammation, "
+            "or a stress response. A differential count can help identify the cause."
+        )
+
+
 def generate_insights(results: list[LabResult]) -> list[str]:
     insights: list[str] = []
 
@@ -625,6 +694,7 @@ def generate_insights(results: list[LabResult]) -> list[str]:
     _get_infection_patterns(results, insights)
     _get_metabolic_patterns(results, insights)
     _get_organ_patterns(results, insights)
+    _get_cbc_individual_patterns(results, insights)
 
     n_ab = _ab_count(results)
     if n_ab >= 5:

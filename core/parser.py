@@ -1,17 +1,4 @@
-"""
-OCR-tolerant lab report parser.
-
-Pipeline per line:
-  clean_ocr_text() → pattern matching → normalize_unit()
-
-Handles:
-  - "WBC Count: 7.5 x10^3/uL (4.0-11.0)"
-  - "Hemoglobin 9.5 g/dL"
-  - "Absolute Neutrophil Count 341 1043/pL"   ← OCR-mangled
-  - "RBC 4.2 million/uL"
-  - "Platelets 150k"
-  - "WBc 13000 /uL"
-"""
+"""Strict lab report parser with dictionary-based validation"""
 from __future__ import annotations
 
 import logging
@@ -21,346 +8,812 @@ from core.normalization import repair_ocr_text, normalize_unit
 
 logger = logging.getLogger(__name__)
 
-# Numeric: allow spaces or common OCR noise in numbers (cleaned later)
-_NUM = r"(?:(?:\d{1,3}(?:[ ,]\d{3})+)|\d+)(?:[\.,]\d+)?(?:[eE][+\-]?\d+)?"
+# 1.  Canonical Lab Test Dictionary
+# Maps canonical_key -> list of lowercase aliases (including common OCR variants)
+_LAB_TEST_NAMES: dict[str, list[str]] = {
+# Complete Blood Count
+    "hemoglobin": [
+        "hemoglobin", "haemoglobin", "hb", "hgb", "hemoglobn", "hemglobin",
+        "haemoglobn", "hemog10bin", "hemog1obin",
+    ],
+    "hematocrit": [
+        "hematocrit", "haematocrit", "hct", "pcv", "packed cell volume",
+        "hematort", "haematort", "hemotocrit",
+    ],
+    "wbc": [
+        "wbc", "white blood cell", "white blood cells",
+        "white cell", "white cells",
+        "leukocyte", "leukocytes", "leucocyte", "leucocytes",
+        "total leucocyte count", "tlc", "total leukocyte count",
+        "w8c",
+    ],
+    "rbc": [
+        "rbc", "red blood cell", "red blood cells", "red cell count",
+        "erythrocyte", "erythrocytes", "r8c",
+    ],
+    "mcv": ["mcv", "mean corpuscular volume"],
+    "mch": ["mch", "mean corpuscular hemoglobin"],
+    "mchc": ["mchc", "mean corpuscular hemoglobin concentration"],
+    "rdw": ["rdw", "rdw-cv", "red cell distribution width", "rdw cv", "row-cv"],
+    "rdw_sd": ["rdw sd"],
+    "platelet_count": [
+        "platelet count", "platelets", "plt", "platelet",
+        "thrombocyte", "thrombocytes",
+        "total platelet count",
+    ],
+    "mpv": ["mpv", "mean platelet volume"],
+    "pdw": ["pdw", "platelet distribution width"],
+    "mpv": ["mpv", "mean platelet volume", "mean platelet volume (mpv)"],
+    "pdw": ["pdw", "platelet distribution width"],
+    "neutrophils": [
+        "neutrophils", "neutrophil", "neutrophil count",
+        "absolute neutrophil count", "anc",
+        "neutrophils absolute", "neut",
+    ],
+    "lymphocytes": [
+        "lymphocytes", "lymphocyte", "lymphocyte count",
+        "absolute lymphocyte count", "alc",
+        "lymphocytes absolute", "lymp", "lymph",
+    ],
+    "monocytes": [
+        "monocytes", "monocyte", "monocyte count",
+        "absolute monocyte count",
+        "monocytes absolute", "mono",
+    ],
+    "eosinophils": [
+        "eosinophils", "eosinophil", "eosinophil count",
+        "absolute eosinophil count",
+        "eosinophils absolute", "eo", "eos",
+    ],
+    "basophils": [
+        "basophils", "basophil", "basophil count",
+        "absolute basophil count",
+        "basophils absolute", "baso",
+    ],
+# Biochemistry
+    "alt": ["alt", "alanine aminotransferase", "sgpt", "gpt", "alanine transaminase"],
+    "ast": ["ast", "aspartate aminotransferase", "sgot", "got", "aspartate transaminase"],
+    "alp": ["alp", "alkaline phosphatase", "alk phos", "alkaline phosphatise"],
+    "ggt": ["ggt", "gamma gt", "gamma glutamyl transferase", "ggtp", "gamma-glutamyl transferase"],
+    "bilirubin_total": ["total bilirubin", "bilirubin total", "bilirubin"],
+    "bilirubin_direct": ["direct bilirubin", "bilirubin direct", "conjugated bilirubin"],
+    "bilirubin_indirect": ["indirect bilirubin", "bilirubin indirect", "unconjugated bilirubin"],
+    "total_protein": ["total protein", "protein total", "serum total protein"],
+    "albumin": ["albumin", "serum albumin", "s.albumin"],
+    "globulin": ["globulin", "serum globulin"],
+    "ag_ratio": ["a/g ratio", "albumin globulin ratio", "ag ratio", "a g ratio"],
+    "creatinine": ["creatinine", "creat", "serum creatinine"],
+    "bun": ["bun", "blood urea nitrogen"],
+    "urea": ["urea", "blood urea", "serum urea"],
+    "uric_acid": ["uric acid", "urate", "serum uric acid"],
+    "sodium": ["sodium", "na", "serum sodium"],
+    "potassium": ["potassium", "k", "serum potassium"],
+    "chloride": ["chloride", "cl", "serum chloride"],
+    "bicarbonate": ["bicarbonate", "hco3", "co2", "carbon dioxide"],
+    "calcium": ["calcium", "ca", "serum calcium"],
+    "phosphorus": ["phosphorus", "phosphate", "p", "serum phosphorus"],
+    "magnesium": ["magnesium", "mg", "serum magnesium"],
+# Lipid Profile
+    "total_cholesterol": ["total cholesterol", "cholesterol", "chol", "serum cholesterol"],
+    "hdl": ["hdl", "hdl cholesterol", "high density lipoprotein"],
+    "ldl": ["ldl", "ldl cholesterol", "low density lipoprotein"],
+    "vldl": ["vldl", "vldl cholesterol"],
+    "triglycerides": ["triglycerides", "triglyceride", "tg", "trig"],
+    "non_hdl": ["non hdl", "non hdl cholesterol", "non-hdl"],
+# Thyroid
+    "tsh": ["tsh", "thyroid stimulating hormone", "thyrotropin"],
+    "t3": ["t3", "triiodothyronine", "free t3", "ft3"],
+    "t4": ["t4", "thyroxine", "free t4", "ft4"],
+# Diabetes
+    "hba1c": [
+        "hba1c", "hb a1c", "glycated hemoglobin", "glycosylated hemoglobin",
+        "a1c", "hba1c %",
+    ],
+    "fasting_glucose": [
+        "fasting glucose", "fasting blood sugar", "fbs",
+        "fasting sugar", "fasting plasma glucose",
+    ],
+    "postprandial_glucose": [
+        "postprandial glucose", "ppbs",
+        "post prandial blood sugar", "pp sugar",
+        "post meal glucose",
+    ],
+    "random_glucose": [
+        "random glucose", "random blood sugar", "rbs",
+        "casual plasma glucose",
+    ],
+# Inflammation / Immunology
+    "crp": ["crp", "c reactive protein", "c-reactive protein"],
+    "esr": ["esr", "erythrocyte sedimentation rate"],
+    "ferritin": ["ferritin", "serum ferritin"],
+    "vitamin_b12": ["vitamin b12", "b12", "vit b12", "cyanocobalamin"],
+    "vitamin_d": [
+        "vitamin d", "25 oh vitamin d", "25-hydroxy vitamin d",
+        "vit d", "25-hydroxyvitamin d",
+    ],
+    "iron": ["iron", "serum iron"],
+    "tibc": ["tibc", "total iron binding capacity"],
+    "transferrin_saturation": ["transferrin saturation", "iron saturation", "transferrin sat"],
+# Cardiac / Enzymes
+    "troponin_i": ["troponin i", "trop i"],
+    "troponin_t": ["troponin t", "trop t"],
+    "ck_mb": ["ck mb", "ck-mb"],
+    "ck": ["ck", "creatine kinase", "cpk", "total cpk"],
+    "ldh": ["ldh", "lactate dehydrogenase"],
+# Coagulation
+    "pt": ["pt", "prothrombin time"],
+    "inr": ["inr", "international normalized ratio"],
+    "aptt": ["aptt", "activated partial thromboplastin time", "ptt"],
+    "fibrinogen": ["fibrinogen"],
+    "d_dimer": ["d dimer", "d-dimer"],
+# Urine
+    "urine_ph": ["urine ph", "ph urine"],
+    "urine_specific_gravity": ["urine specific gravity", "specific gravity"],
+    "urine_protein": ["urine protein", "protein urine", "urine albumin"],
+    "urine_glucose": ["urine glucose", "glucose urine"],
+    "urine_ketones": ["urine ketones", "ketones urine"],
+    "urine_blood": ["urine blood", "blood urine"],
+    "urine_bilirubin": ["urine bilirubin", "bilirubin urine"],
+    "urine_urobilinogen": ["urine urobilinogen", "urobilinogen"],
+    "urine_nitrite": ["urine nitrite", "nitrite"],
+    "urine_leukocytes": ["urine leukocytes", "leukocytes urine", "pus cells"],
+# Tumor Markers
+    "psa": ["psa", "prostate specific antigen"],
+    "cea": ["cea", "carcinoembryonic antigen"],
+    "afp": ["afp", "alpha fetoprotein"],
+    "ca125": ["ca 125", "ca125"],
+    "ca199": ["ca 19 9", "ca199"],
+    "ca153": ["ca 15 3", "ca153"],
+    "beta_hcg": ["beta hcg", "b hcg", "beta hcg total"],
+# Other
+    "amylase": ["amylase", "serum amylase"],
+    "lipase": ["lipase", "serum lipase"],
+    "lactate": ["lactate", "lactic acid"],
+    "ammonia": ["ammonia", "nh3", "serum ammonia"],
+    "homocysteine": ["homocysteine"],
+    "folate": ["folate", "folic acid"],
+    "blood_group": ["blood group", "blood type", "abo group"],
+    "rh_factor": ["rh factor", "rh"],
+}
 
-# Unit-like token: allow almost anything that looks like a unit, including OCR noise
-_UNIT_TOK = r"[A-Za-zµ%/\^x\.\d\u00B2\u00B3\u2070-\u2079\*\+\-]+"
+# Build reverse lookup: lowercase alias -> canonical key
+_ALIAS_TO_KEY: dict[str, str] = {}
+for key, aliases in _LAB_TEST_NAMES.items():
+    for alias in aliases:
+        _ALIAS_TO_KEY[alias] = key
+    _ALIAS_TO_KEY[key.replace("_", " ")] = key
 
-# Reference range: more flexible pattern
-_REF = r"\(?\s*(?:[\d,]+\.?\d*)\s*(?:-|–|to)\s*(?:[\d,]+\.?\d*)\s*\)?"
+
+# 2.  Known Units (surface forms — no normalization applied during detection)
+_KNOWN_UNITS: set[str] = {
+# Chemistry
+    "g/dL", "g/dl", "gm/dl", "gm%", "g%", "gm/dL",
+    "mg/dL", "mg/dl",
+    "mmol/L", "mmol/l",
+    "µmol/L", "umol/l",
+    "IU/L", "iu/l", "u/l", "u/L", "U/L",
+    "mIU/L", "miu/l",
+    "mIU/mL", "miu/ml",
+    "µIU/mL", "uiu/ml", "µiu/ml",
+    "ng/mL", "ng/ml",
+    "ng/dL", "ng/dl",
+    "pg/mL", "pg/ml",
+    "µg/L", "ug/l",
+    "µg/mL", "ug/ml",
+    "µg/dL", "ug/dl",
+    "mEq/L", "meq/l",
+    "g/L", "g/l",
+    "mg/L", "mg/l",
+    "nmol/L", "nmol/l",
+    "pmol/L", "pmol/l",
+# Hematology
+    "fL", "fl",
+    "pg",
+    "%",
+    "x10^3/uL", "x10^3/µL", "x10^3/ul",
+    "x10^6/uL", "x10^6/µL", "x10^6/ul",
+    "x10^9/L", "x10^9/µL",
+    "10^3/uL", "10^3/µL",
+    "10^6/uL", "10^6/µL",
+    "/uL", "/µL", "/ul",
+    "/cumm", "/cu mm", "/cmm", "/mm3", "cumm",
+    "cells/uL", "cells/µL",
+    "Lakh cells", "lakh cells", "Lakhs cells",
+    "million/uL", "million/µL",
+    "thousand/uL", "thousand/µL",
+    "K/uL", "k/ul",
+    "lakh/cumm",
+# OCR variants of x10^3/µL etc.
+    "x10.e 3/pl", "x10.e 3/µL",
+    "x10.e 6/uL", "x10.e 6/µL",
+# OCR common unit manglings — multi-token forms for 3-token matching
+    "/pl", "/wl",
+    "pe",
+    "cells/pl", "cells/wl",
+    "million/pl", "million/wl",
+    "million / wl", "million / pl",
+    "cels/ut", "cels/µL",
+    "cels/ul",
+    "wa",
+# Special
+    "ratio",
+    "index",
+    "mg/g",
+# ESR / Time
+    "mm/hr", "mm/h", "mm/hour",
+    "mm 1st hour", "mm 1st hr",
+    "min", "minutes",
+    "sec", "seconds",
+# Hormone
+    "mIU/ml",
+    "µIU/ml",
+}
+
+_KNOWN_UNITS_LOWER = {u.lower().replace(" ", "") for u in _KNOWN_UNITS}
+
+
+def _is_unit_token(token: str) -> bool:
+    """Check if token is a known laboratory unit (exact or normalized)."""
+    t = token.strip()
+    if not t:
+        return False
+# Direct surface-form match
+    if t.lower().replace(" ", "") in _KNOWN_UNITS_LOWER:
+        return True
+# Fallback: normalize and check
+    n = normalize_unit(t)
+    if n and n.lower().replace(" ", "") in _KNOWN_UNITS_LOWER:
+        return True
+    return False
+
+
+# 3.  Metadata / Header / Rejection Patterns
+
+_METADATA_KEYWORDS: list[str] = [
+# Contact
+    "phone", "mobile", "contact", "email", "e-mail", "website", "fax",
+# Address
+    "address", "nagar", "road", "street", "colony", "society", "area", "sector",
+# Patient / Report IDs — use FULL phrases only to avoid killing real test lines
+    "patient id", "patient name", "patient no", "patient number",
+    "uhid", "unique health id", "health id",
+    "report id", "report no", "report number",
+    "barcode", "bar code", "qrcode", "qr code",
+# Doctor / Referral
+    "doctor", "consultant", "ref by", "referred by", "ref dr",
+# Demographics — use full phrases to avoid catching numeric lab values
+    "date of birth", "patient age", "patient gender", "patient sex",
+# Dates / Times
+    "collection date", "collection at", "collected at",
+    "collection centre", "collection center",
+    "report date", "reported at", "reported on", "reporting date",
+# Sample / Specimen — full phrases only (not bare "sample" which can appear in headers)
+    "specimen type", "specimen collected", "specimen received",
+    "sample collected", "sample received", "sample type",
+# Facility / Lab — use full phrases so bare "lab" or "name" don't kill test lines
+    "hospital name", "laboratory name", "lab address",
+# Interpretation
+    "interpretation", "signature", "remarks", "comments",
+    "generated on", "generated at", "printed on", "printed at",
+# Page / Invoice
+    "invoice no", "invoice number", "registration no", "registration number",
+# Registration numbers
+    "reg no", "reg id", "reg number",
+    "ip no", "op no",
+# Column headers
+    "ref range", "normal range", "normal value",
+    "test name", "test description", "test parameter",
+    "observed value", "expected value",
+# Clinical history
+    "clinical history", "clinical details",
+    "investigation requested",
+# Authorization
+    "forwarded", "authorized by",
+# Misc
+    "prepared by", "reviewed by",
+    "collected on", "received on",
+# Hospital / lab names commonly appearing in headers
+    "metropolis", "thyrocare", "lal pathlabs", "srl diagnostics",
+    "apollo diagnostics", "suburban diagnostics",
+    "tata medical", "fortis", "max health", "medanta",
+    "health cart", "1mg", "pharmeasy", "netmeds", "practo",
+    "clarity medical", "lifecell", "agilus",
+]
+
+_META_RE = re.compile(
+    r"(?:" + "|".join(
+        re.escape(kw) if not kw.endswith("\\.") else kw
+        for kw in _METADATA_KEYWORDS
+    ) + r")",
+    re.I,
+)
+
+_SECTION_HEADERS: list[str] = [
+    "haematology", "hematology", "biochemistry", "immunology", "microbiology",
+    "serology", "pathology", "histopathology", "cytopathology",
+    "blood bank", "blood transfusion", "transfusion medicine",
+    "complete blood count", "cbc", "hemogram", "blood count",
+    "liver function test", "lft", "hepatic function",
+    "kidney function test", "kft", "renal function test", "rft",
+    "lipid profile", "lipid panel", "lipid study",
+    "thyroid profile", "thyroid panel", "thyroid function",
+    "thyroid function test", "tft",
+    "iron studies", "iron profile", "iron deficiency profile",
+    "diabetes profile", "diabetes panel", "diabetic profile",
+    "electrolyte panel", "electrolyte profile", "metabolic panel",
+    "basic metabolic panel", "bmp",
+    "comprehensive metabolic panel", "cmp",
+    "cardiac profile", "cardiac panel", "cardiac markers",
+    "coagulation profile", "coagulation panel", "coagulation study",
+    "urine analysis", "urine routine", "urine examination", "urinalysis",
+    "urine microscopy", "urine culture",
+    "stool analysis", "stool examination", "stool culture",
+    "hormonal assay", "hormone profile",
+    "tumor markers", "tumour markers",
+    "test description", "test name", "test parameter",
+    "result", "results",
+    "reference range", "reference ranges", "ref range", "normal range",
+    "unit", "units",
+    "biochemical", "hematological", "serolog",
+    "normal value", "observed value", "expected value",
+    "parameter", "investigation requested",
+]
+
+_HEADER_RE = re.compile(
+    r"^(?:\s*(?:" + "|".join(re.escape(h) for h in _SECTION_HEADERS) + r")\s*)$",
+    re.I,
+)
+
+_URL_RE = re.compile(r"https?://\S+|www\.\S+", re.I)
+_EMAIL_RE = re.compile(r"\S+@\S+\.\S+")
+# Phone patterns that won't match lab reference ranges like "4000-10000"
+# Pattern A: 10+ consecutive digits (no separators) — e.g. "9876543210"
+# Pattern B: precisely grouped like (123) 456-7890 or 123-456-7890
+# Pattern C: +91-XXXXXXXXXX (country code with 10 consecutive digits)
+_PHONE_RE = re.compile(
+    r"\d{10,}"                                              # 10+ consecutive digits
+    r"|\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}"                   # (XXX) XXX-XXXX
+    r"|\+\d{1,3}[-.\s]?\d{10}"                              # +91-XXXXXXXXXX
+)
+
+_DATE_LINE_RE = re.compile(
+    r"^\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{2,4}$"
+    r"|^\d{4}[/\-\.]\d{1,2}[/\-\.]\d{1,2}$"
+    r"|^\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM|am|pm)?$",
+)
+
+_DATE_MONTH_RE = re.compile(
+    r"^\d{1,2}\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)", re.I,
+)
+_DATE_MONTH2_RE = re.compile(
+    r"^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{1,2},?\s*\d{4}$", re.I,
+)
+
+
+# 4.  Reference Range Patterns
+
+def _is_ref_range_token(token: str) -> bool:
+    """Check if token is a reference range pattern."""
+    t = token.strip().strip("()[]{}").strip()
+    if not t:
+        return False
+
+# Range: 13-17, 4.0-11.0, 150000-410000
+    if re.match(r"^[<>≤≥]?\s*[\d,]+\.?\d*\s*[-–]\s*[\d,]+\.?\d*%?$", t):
+        return True
+
+# Threshold: <5, >10, ≤5, ≥10, <5
+    if re.match(r"^[<>≤≥]\s*[\d,]+\.?\d*%?$", t):
+        return True
+
+# Qualitative reference values
+    if t.lower() in {
+        "negative", "positive", "normal", "abnormal",
+        "reactive", "non reactive", "nonreactive",
+        "nil", "trace",
+    }:
+        return True
+
+    return False
+
+
+def _is_qualitative_value(token: str) -> bool:
+    t = token.strip().lower()
+    return t in {
+        "negative", "positive", "normal", "abnormal",
+        "reactive", "non reactive", "nonreactive",
+        "nil", "trace", "detected", "not detected",
+        "present", "absent",
+    }
+
+
+def _extract_numeric(token: str) -> float | None:
+    """Extract numeric value, handling <, >, ≤, ≥ prefixes, commas, and trailing %."""
+    t = token.strip().strip("()[]{}")
+    if not t:
+        return None
+# Strip trailing % for numeric extraction
+    pct = t.endswith('%')
+    t_clean = t.rstrip('%') if pct else t
+# Try direct parse
+    try:
+        return float(t_clean.replace(",", ""))
+    except ValueError:
+        pass
+# Try with comparison prefix
+    m = re.match(r"^[<>≤≥]\s*([\d,]+\.?\d*)$", t_clean)
+    if m:
+        try:
+            return float(m.group(1).replace(",", ""))
+        except ValueError:
+            pass
+    return None
+
+
+def _normalize_ref_range(ref: str) -> str:
+    """Normalize reference range format: remove spaces around dash, collapse whitespace."""
+    s = ref.strip().strip("()[]{}").strip()
+    s = re.sub(r"\s*[-–]\s*", "-", s)
+    s = re.sub(r"\s*to\s+", "-", s)
+    return s
+
+
+# 5.  OCR Cleaning
+
+_LEADING_NOISE_RE = re.compile(r"^[\*\-\•'\"\`®€©●■►◆◇▸▪→⇒≈✦✧⬤○●]+")
+_TRAILING_PAGE_RE = re.compile(r"\s*page\s*\d+\s*$", re.I)
+_TRAILING_FRAGMENT = re.compile(r"\s*\d{1,2}\s*/\s*\d{1,4}\s*$")
+
 
 def _clean_line(line: str) -> str:
     s = (line or "").strip()
     if not s:
         return ""
-    # Strip leading OCR noise: bullets, dashes, digits+dot, and stray quotes/apostrophes
-    s = re.sub(r"^(?:[\*\-\•'\"\`]+|\d+\.)\s*", "", s)
-    # Strip leading non-alphanumeric symbols (e.g. ® € © that prefix lab names)
+    s = _LEADING_NOISE_RE.sub("", s)
+# Preserve # and % prefixes for hematology differential test names
+# e.g. "#NEUT" (absolute) and "% Neut" (percentage) — the resolver
+# uses these prefixes to distinguish neutrophils_abs from neutrophils_pct.
+    prefix = ""
+    m_prefix = re.match(r"^([#%]\s*?)(?=NEUT|LYMP|MONO|EOS|BASO|neut|lymp|mono|eos|baso)", s, re.I)
+    if m_prefix:
+        prefix = m_prefix.group(1)
+        s = s[len(prefix):]
     s = re.sub(r"^[^A-Za-z0-9]+", "", s)
-    s = re.sub(r"\s+", " ", s).strip()
+    s = prefix + s
+    s = _TRAILING_PAGE_RE.sub("", s)
+    s = _TRAILING_FRAGMENT.sub("", s)
+# Preserve double-space column separators while collapsing other whitespace
+    s = re.sub(r"[ \t\f\v]{2,}", "  ", s).strip()
     return s
 
 
-def _clean_multicolumn_line(line: str) -> str:
-    s = (line or "").strip()
-    if not s:
-        return ""
-    s = re.sub(r"^(?:[\*\-\•'\"\`]+|\d+\.)\s*", "", s)
-    s = re.sub(r"^[^A-Za-z0-9]+", "", s)
-    s = s.replace("\t", "  ")
-    s = re.sub(r"[ \t\f\v]{2,}", "  ", s)
-    return s
+# 6.  Lab Test Name Lookup
+
+def _lookup_test(name_str: str) -> str | None:
+    """Find canonical key for a test name (exact fuzzy match)."""
+    n = name_str.strip().lower()
+    n = re.sub(r"\s+", " ", n)
+# Exact match
+    if n in _ALIAS_TO_KEY:
+        return _ALIAS_TO_KEY[n]
+# Strip trailing non-alpha chars (e.g. "Hb :" -> "hb")
+    n_clean = re.sub(r"[^a-z0-9\s]", "", n).strip()
+    if n_clean in _ALIAS_TO_KEY:
+        return _ALIAS_TO_KEY[n_clean]
+# Try removing trailing single-letter artifacts
+    n_short = re.sub(r"\s+[a-z]\s*$", "", n_clean).strip()
+    if n_short and n_short != n_clean and n_short in _ALIAS_TO_KEY:
+        return _ALIAS_TO_KEY[n_short]
+    return None
 
 
-def _parse_value(num: str) -> float:
-    # Remove spaces, commas, and handle common OCR decimal errors
-    s = num.replace(" ", "").replace(",", "")
-    # If multiple dots appear (OCR error), take the first one or last one? 
-    # Usually the last one if it looks like a decimal. 
-    if s.count(".") > 1:
-        parts = s.split(".")
-        s = "".join(parts[:-1]) + "." + parts[-1]
-    return float(s)
+# 7.  Core Parsing Strategies
 
 
-# Bare numeric reference range (without parentheses): e.g. 83-101 or 13.0 - 17.0
-_REF_BARE = rf"{_NUM}\s*[-\u2013]\s*{_NUM}"
+def _extract_ref_range_backward(tokens: list[str], idx: int) -> tuple[str, int] | None:
+    """Extract a ref range ending at token idx"""
+# Single-token: "13-17" or "(4.0-11.0)"
+    cleaned = tokens[idx].strip("()[]{}").strip()
+    if _is_ref_range_token(cleaned):
+        return cleaned, idx - 1
 
-# Ordered list of regex patterns — most specific first.
-_PATTERNS = [
-    # P1: "Name: value unit (ref)" or "Name = value unit" — colon/equals separator
-    re.compile(
-        rf"^(?P<name>[A-Za-z0-9][A-Za-z0-9 \(\)/\.\-%]+?)\s*[:=]\s*"
-        rf"(?P<value>{_NUM})\s*"
-        rf"(?P<unit>{_UNIT_TOK})?\s*"
-        rf"(?:\((?P<ref>[^)]+)\))?\s*$",
-        re.I
-    ),
-    # P2: "Name value unit (ref)" — space separator, parens ref (generic fallback)
-    # Name should be LETTERS ONLY (no digits), to avoid consuming numbers
-    re.compile(
-        rf"^(?P<name>[A-Za-z][A-Za-z \(\)/\.\-%]*?)\s+"
-        rf"(?P<value>{_NUM})\s*"
-        rf"(?P<unit>{_UNIT_TOK})?\s*"
-        rf"(?:\((?P<ref>[^)]+)\))?\s*$",
-        re.I
-    ),
-    # P3: "Name - value unit [bare-ref]" — dash separator (e.g. "MCV - 87.7 fL 83-101")
-    # Name should be LETTERS ONLY (no digits), to prevent matching numbers as part of name
-    re.compile(
-        rf"^(?P<name>[A-Za-z][A-Za-z ]*?)\s+[-\u2013]\s+"
-        rf"(?P<value>{_NUM})\s*"
-        rf"(?P<unit>{_UNIT_TOK})?\s*"
-        rf"(?P<ref>{_REF_BARE})?\s*$",
-        re.I
-    ),
-    # P4: "Name value unit lo-hi" — space separator WITH required bare ref range
-    # Alpha-only name + required unit + required bare ref (for high-confidence matches)
-    re.compile(
-        rf"^(?P<name>[A-Za-z][A-Za-z ]+?)\s+"
-        rf"(?P<value>{_NUM})\s+"
-        rf"(?P<unit>{_UNIT_TOK})\s+"
-        rf"(?P<ref>{_REF_BARE})\s*$",
-        re.I
-    ),
-]
+# Multi-token: "31.5 - 34.5"  (three tokens: lower, dash, upper)
+    if (idx >= 2
+            and _extract_numeric(tokens[idx]) is not None
+            and tokens[idx - 1] in ("-", "–", "—")
+            and _extract_numeric(tokens[idx - 2]) is not None):
+        return f"{tokens[idx - 2]}-{tokens[idx]}", idx - 3
 
-# Lines that are pure column-header rows — skip only when there is NO numeric value on the line.
-# Deliberately narrow: avoid matching real test lines that start with words like "Lab", "Health",
-# "Medical", etc. which legitimately appear as part of test names.
-_SKIP_RE = re.compile(
-    r"^(?!.*\d)\s*(test\s*name|result|reference\s*range?|normal\s*range|unit|hemoglobin\s*low)\s*$",
-    re.I,
-)
+# Defensive: idx points to dash, upper bound is to the right
+    if (idx >= 1 and idx + 1 < len(tokens)
+            and tokens[idx] in ("-", "–", "—")
+            and _extract_numeric(tokens[idx - 1]) is not None
+            and _extract_numeric(tokens[idx + 1]) is not None):
+        return f"{tokens[idx - 1]}-{tokens[idx + 1]}", idx - 1
 
-# Separate pattern for hard metadata lines that never contain test values
-_META_RE = re.compile(
-    r"^\s*(patient\s*id|uhid|ref(?:erred)?\s*by|registration|report\s*id|"
-    r"collection\s*date|received|printed\s*by|authorized\s*by|specimen\s*type|"
-    r"tel:|phone:|mobile:|dr\.\s+[A-Za-z]|mrs?\.\s+[A-Za-z]|miss\.\s+[A-Za-z]|"
-    r"age\s*[:/]?\s*\d+|gender\s*[:/]?\s*[MF]|sex\s*[:/]?\s*[MF]|"
-    r"date\s*[:/]?\s*\d+|total\s*tests?|abnormal\s*tests?|page\s*\d+|"
-    # Lab-report header lines commonly seen in OCR output
-    r"automated\s+\d|age\s*/\s*gender|pathlabs?|pathlab|\(.*\).*pathlabs?)",
-    re.I,
-)
-
-# Valid unit characters (expanded for robustness)
-_VALID_UNIT_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789%/^.µx*+-"
-
-def _is_valid_unit(unit_str: str) -> bool:
-    """Check if unit string contains reasonable characters and is not pure noise."""
-    if not unit_str:
-        return True
-    u = unit_str.lower()
-
-    # Medical units often have specific chars
-    medical_markers = ["/", "µ", "%", "^", "10"]
-    if any(m in u for m in medical_markers):
-        return True
-
-    # Check for at least one reasonable unit character
-    valid_count = sum(1 for c in u if c in _VALID_UNIT_CHARS)
-    if valid_count < 1:
-        logger.debug("[parser] rejecting invalid unit (no valid chars): %r", unit_str)
-        return False
-
-    # Reject pure noise tokens
-    noise_patterns = [r"\borsl\b", r"\brors\b", r"\bfe\b", r"\bpo\b", r"\ba\b", r"\bmeeacop\b"]
-    for pattern in noise_patterns:
-        if re.search(pattern, u, re.I):
-            logger.debug("[parser] rejecting unit with noise token: %r", unit_str)
-            return False
-
-    # Reject long strings that are likely just text
-    if len(u.split()) > 4:
-        logger.debug("[parser] rejecting long textual unit: %r", unit_str)
-        return False
-
-    return True
+    return None
 
 
-def _is_garbage_line(line: str) -> bool:
-    """
-    Reject lines that are mostly garbage OCR noise.
-    A line is garbage if it has lots of non-dictionary words with no structure.
-    Test lines have: [word] [number] [unit/word] [number-number] ...
-    Garbage lines have: gibberish [space] gibberish gibberish...
-    """
-    words = line.lower().split()
-    if len(words) < 2:
-        return False
-    
-    # Common English/medical words that are always valid
-    valid_words = {
-        'and', 'or', 'the', 'a', 'an', 'by', 'from', 'to', 'of', 'in', 'for',
-        'test', 'name', 'result', 'unit', 'range', 'reference', 'normal',
-        'low', 'high', 'value', 'patient', 'age', 'date', 'report', 'lab',
-        # Medical-specific
-        'count', 'level', 'hemoglobin', 'glucose', 'cell', 'blood', 'ratio',
-        'absolute', 'lymphocyte', 'neutrophil', 'monocyte', 'eosinophil',
-    }
-    
-    real_word_count = 0
-    num_count = 0
-    alpha_word_count = 0
-    alpha_tokens: list[str] = []
-    
-    for word in words:
-        # Numbers and numeric patterns are legitimate in test lines
-        # Updated to handle percentages (40%), ranges (37-47%), and parenthesized ranges ((37-47%))
-        if re.match(r'^[\d\.e\-\+%\(\)]+$', word):
-            num_count += 1
-            continue
-        # Dashes alone are not words
-        if word in ['-', '–', '—', 'to']:
-            continue
-        # Track tokens containing alphabetic chars for test-name detection
-        if re.search(r'[A-Za-z]', word):
-            alpha_word_count += 1
-            alpha_tokens.append(word)
-        # Check if it's a known word or valid text token
-        if word in valid_words or (len(word) >= 3 and re.search(r'[A-Za-z]', word)):
-            real_word_count += 1
-    
-    # Reject single short alphabetic test names that are not approved medical abbreviations.
-    if num_count >= 1 and len(alpha_tokens) == 1:
-        token = alpha_tokens[0]
-        if re.fullmatch(r'[A-Za-z]{1,3}', token):
-            approved_short_terms = {
-                'RBC', 'WBC', 'MCH', 'MCV', 'TSH', 'HDL',
-                'LDL', 'ALT', 'AST', 'ESR', 'CRP', 'PSA', 'HIV', 'RDW', 'POW'
-            }
-            if token.upper() not in approved_short_terms:
-                return True
-
-    # If line has both numeric results and alphabetic tokens, it's likely a valid test line.
-    if num_count >= 1 and alpha_word_count >= 1:
-        return False
-
-    # If we have mostly real words (>= 40% real), it's a test line
-    total_tokens = real_word_count + num_count
-    if total_tokens >= 2:
-        ratio = real_word_count / total_tokens
-        if ratio >= 0.4:
-            return False
-    
-    # Everything else is garbage
-    logger.debug("[parser] rejecting garbage line: %r (real_words=%d, alpha_words=%d, nums=%d)", line, real_word_count, alpha_word_count, num_count)
-    return True
-
-
-def _extract_first_value(line: str) -> tuple[str, float, str] | None:
-    """
-    Extract (name, value, rest_of_line) from a line.
-    Returns: (name_part, first_number_value, remaining_text_after_number)
-    """
-    # Find first standalone number in line, not digits embedded in a word like T4 or B12.
-    num_match = re.search(rf"(?<![A-Za-z0-9]){_NUM}", line)
-    if not num_match:
-        return None
-    
-    name_part = line[:num_match.start()].strip().rstrip(":=-").strip()
-    if len(name_part) < 2:
-        return None
-    
-    try:
-        value = _parse_value(num_match.group(0))
-    except:
-        return None
-    
-    rest_of_line = line[num_match.end():].strip()
-    return (name_part, value, rest_of_line)
-
-
-def _looks_like_ref_range(text: str) -> bool:
-    return bool(re.search(rf"{_REF_BARE}", text))
-
-
-def _parse_multicolumn_line(line: str) -> dict | None:
-    """
-    Parse a line that appears to have multiple columns separated by large whitespace.
-    Expected columns: name, value, unit, reference range.
-    This avoids confusing the reference range as the value.
-    """
-    columns = [col.strip() for col in re.split(r"\s{2,}", line) if col.strip()]
-    if len(columns) < 3:
+def _backward_token_parse(tokens: list[str]) -> dict | None:
+    """Parse tokens right-to-left handling all reference range orderings."""
+    if len(tokens) < 2:
         return None
 
-    # Repair numeric fragments split across adjacent columns, e.g. "12 . 2" → "12.2".
-    if len(columns) >= 4 and columns[2] in {'.', ','} and re.fullmatch(r"\d+(?:[\.,]\d*)?", columns[1]) and re.fullmatch(r"\d+", columns[3]):
-        columns[1] = f"{columns[1].replace(',', '')}.{columns[3]}"
-        del columns[2:4]
+# Clean parentheses from each token (common for reference ranges)
+    cleaned = [t.strip("()[]{}").strip() for t in tokens]
 
-    name = columns[0]
-    if len(name) < 2 or not re.search(r"[A-Za-z]", name):
+    idx = len(cleaned) - 1
+    unit = ""
+    ref_range = ""
+    value: float | None = None
+    qual_value = ""
+    flag = ""
+
+# Phase 1: Handle trailing flag (H / L / N)
+    _FLAG_SET = {"H", "L", "N", "HIGH", "LOW", "NORMAL"}
+    _FLAG_OCR = {"TOW", "NORMA", "NORM", "WC", "WICH", "LOW", "HIGH", "NORMAL"}
+    if idx >= 0:
+        upper = cleaned[idx].upper()
+        if upper in _FLAG_SET or upper in _FLAG_OCR:
+            flag = tokens[idx]
+            idx -= 1
+
+# Phase 2: Handle trailing dash (truncated ref range)
+# e.g. "4.800 -" or "40 -" where the upper bound is missing
+    if idx >= 1 and cleaned[idx] in ("-", "–", "—"):
+        prev_val = _extract_numeric(tokens[idx - 1])
+        if prev_val is not None:
+            ref_range = tokens[idx - 1] + "-"
+            idx -= 2
+
+    if idx < 0:
         return None
 
-    # Column 1 should be the numeric result
-    value_part = columns[1]
-    try:
-        value = _parse_value(value_part)
-    except Exception:
-        return None
+# Phase 3: Identify the last meaningful token
+    last_cleaned = cleaned[idx]
+    is_unit = _is_unit_token(last_cleaned)
+    is_ref = _is_ref_range_token(last_cleaned)
+    is_value = _extract_numeric(last_cleaned) is not None
 
-    raw_unit = columns[2]
-    ref = ""
-    if len(columns) >= 4:
-        ref = " ".join(columns[3:]).strip()
+# Phase 3a: Last token is a unit
+# Pattern: ... VALUE [REF] UNIT
+    if is_unit:
+        unit = tokens[idx]
+        idx -= 1
+        if idx >= 0 and _is_ref_range_token(cleaned[idx]):
+            ref_range = tokens[idx]
+            idx -= 1
+        if idx >= 0:
+            v = _extract_numeric(tokens[idx])
+            if v is not None:
+                value = v
+                if not unit and tokens[idx].rstrip(')').endswith('%'):
+                    unit = '%'
+                idx -= 1
 
-    # If the third column itself looks like a reference range, then unit is missing
-    if _looks_like_ref_range(raw_unit):
-        ref = raw_unit if not ref else f"{raw_unit} {ref}".strip()
-        raw_unit = ""
+# Phase 3b: Last token is a ref range
+# Pattern: ... VALUE [UNIT] REF
+    elif is_ref:
+        ref_range = last_cleaned
+        idx -= 1
+        if idx >= 0 and _is_unit_token(tokens[idx]):
+            unit = tokens[idx]
+            idx -= 1
+        if idx >= 0:
+            v = _extract_numeric(tokens[idx])
+            if v is not None:
+                value = v
+                if not unit and tokens[idx].rstrip(')').endswith('%'):
+                    unit = '%'
+                idx -= 1
 
-    # If the fourth+ columns are not ranges, attempt to parse again more conservatively
-    if ref and not _looks_like_ref_range(ref):
-        # Maybe the third column was actually the unit and fourth column is part of the unit
-        if len(columns) == 3:
-            # Nothing further to do
-            pass
+# Phase 3c: Last token is a numeric value
+# Pattern: ... REF UNIT VALUE   or   ... REF VALUE
+# Also handles split ranges: ... VALUE UNIT lower - upper
+    elif is_value:
+# Check for split ref range first: "lower - upper" (three tokens)
+        if (idx >= 2
+                and tokens[idx - 1] in ("-", "–", "—")
+                and _extract_numeric(tokens[idx - 2]) is not None):
+            ref_range = f"{tokens[idx - 2]}-{tokens[idx]}"
+            idx -= 3
+# Find value and optional unit to the left of the range (longest match first)
+            if idx >= 0:
+                found_unit = False
+                if idx >= 2:
+                    combined3 = tokens[idx - 2] + " " + tokens[idx - 1] + " " + tokens[idx]
+                    if _is_unit_token(combined3):
+                        unit = combined3
+                        idx -= 3
+                        found_unit = True
+                if not found_unit and idx >= 1:
+                    combined = tokens[idx - 1] + " " + tokens[idx]
+                    if _is_unit_token(combined):
+                        unit = combined
+                        idx -= 2
+                        found_unit = True
+                if not found_unit and _is_unit_token(tokens[idx]):
+                    unit = tokens[idx]
+                    idx -= 1
+            if idx >= 0:
+                v = _extract_numeric(tokens[idx])
+                if v is not None:
+                    value = v
+                    if not unit and tokens[idx].rstrip(')').endswith('%'):
+                        unit = '%'
+                    idx -= 1
         else:
-            # If a later column is rangeish, assign from there
-            for idx, col in enumerate(columns[3:], start=3):
-                if _looks_like_ref_range(col):
-                    ref = col
-                    raw_unit = columns[2]
-                    break
+            value = _extract_numeric(tokens[idx])
+            if not unit and tokens[idx].rstrip(')').endswith('%'):
+                unit = '%'
+            idx -= 1
 
-    if raw_unit and not _is_valid_unit(raw_unit):
-        logger.debug("[parser] multicolumn clearing invalid unit noise: %r", raw_unit)
-        raw_unit = ""
+# Look for unit before value (supports multi-word units, longest first)
+            if idx >= 0:
+                found_unit = False
+                if idx >= 2:
+                    combined3 = tokens[idx - 2] + " " + tokens[idx - 1] + " " + tokens[idx]
+                    if _is_unit_token(combined3):
+                        unit = combined3
+                        idx -= 3
+                        found_unit = True
+                if not found_unit and idx >= 1:
+                    combined = tokens[idx - 1] + " " + tokens[idx]
+                    if _is_unit_token(combined):
+                        unit = combined
+                        idx -= 2
+                        found_unit = True
+                if not found_unit and _is_unit_token(tokens[idx]):
+                    unit = tokens[idx]
+                    idx -= 1
 
-    unit = normalize_unit(raw_unit) or raw_unit
-    logger.info("[parser] multicolumn match: %r -> name=%r value=%s unit=%r ref=%r", line, name, value, unit, ref)
+# Look for ref range before unit
+            if idx >= 0:
+                ref_result = _extract_ref_range_backward(tokens, idx)
+                if ref_result:
+                    ref_range, idx = ref_result
+
+# Phase 3d: Neither — try multi-word unit at end
+    else:
+        found_unit = False
+        if idx >= 2:
+            combined3 = tokens[idx - 2] + " " + tokens[idx - 1] + " " + tokens[idx]
+            if _is_unit_token(combined3):
+                unit = combined3
+                idx -= 3
+                found_unit = True
+        if not found_unit and idx >= 1:
+            combined = tokens[idx - 1] + " " + tokens[idx]
+            if _is_unit_token(combined):
+                unit = combined
+                idx -= 2
+                found_unit = True
+        if not found_unit and _is_unit_token(tokens[idx]):
+            unit = tokens[idx]
+            idx -= 1
+# Extract ref range and value regardless of whether a unit was found
+        if idx >= 0 and _is_ref_range_token(cleaned[idx]):
+            ref_range = tokens[idx]
+            idx -= 1
+        if idx >= 0:
+            v = _extract_numeric(tokens[idx])
+            if v is not None:
+                value = v
+                if not unit and tokens[idx].rstrip(')').endswith('%'):
+                    unit = '%'
+                idx -= 1
+
+    if value is None and not qual_value:
+        return None
+
+# Phase 4: Remaining tokens = test name
+    if idx < 0:
+        return None
+
+    name_tokens = tokens[:idx + 1]
+    name = " ".join(name_tokens).strip()
+    name = re.sub(r"[^A-Za-z0-9\s/\-\.%#]", " ", name).strip()
+    name = re.sub(r"\s+", " ", name).strip()
+    if not name or len(name) < 2:
+        return None
+
+# Remove known flag abbreviations from the END of the name
+    name = re.sub(r"\s+(H|L|N|HIGH|LOW|NORMAL)\s*$", "", name, flags=re.I).strip()
+# Remove trailing colon/dash noise from name
+    name = name.rstrip(":=-").strip()
+    if not name or len(name) < 2:
+        return None
+
+    if ref_range:
+        ref_range = _normalize_ref_range(ref_range)
+
+    test_key = _lookup_test(name)
 
     return {
         "test_name": name,
         "value": value,
+        "qualitative_value": qual_value,
         "unit": unit,
-        "raw_unit": raw_unit,
-        "reference_range": ref,
+        "reference_range": ref_range,
+        "test_key": test_key,
     }
 
 
-def _extract_unit_and_ref(rest_of_line: str) -> tuple[str, str]:
+def _parse_multicolumn(tokens: list[str]) -> dict | None:
     """
-    From the rest of the line after the value, extract unit and reference range.
-    Returns: (unit_str, reference_range_str)
+    Parse multi-column format (2+ space split).
+    Expected columns: [test_name, value, (unit|ref), (ref|unit)]
     """
-    unit = ""
-    ref = ""
-    
-    # Try to find unit at the start of rest_of_line
-    unit_match = re.match(rf"^({_UNIT_TOK})\s*", rest_of_line)
-    if unit_match:
-        unit = unit_match.group(1)
-        remaining = rest_of_line[unit_match.end():].strip()
-    else:
-        remaining = rest_of_line
-    
-    # Try to find reference range in what remains
-    range_match = re.match(rf"^({_REF_BARE})\s*$", remaining)
-    if range_match:
-        ref = range_match.group(1)
-    elif remaining and not remaining.startswith("("):
-        # Unstructured remaining text - might be a range
-        if re.search(rf"{_REF_BARE}", remaining):
-            ref = remaining.strip()
-    
-    return (unit, ref)
+    if len(tokens) < 3:
+        return None
 
+    name = tokens[0]
+    if len(name) < 2 or not re.search(r"[A-Za-z]", name):
+        return None
+
+    value = _extract_numeric(tokens[1])
+    if value is None:
+        return None
+
+    unit = ""
+    ref_range = ""
+    rest = tokens[2:]
+
+    if len(rest) == 1:
+        tok = rest[0]
+        if _is_ref_range_token(tok):
+            ref_range = tok
+        elif _is_unit_token(tok):
+            unit = tok
+        else:
+            return None
+    elif len(rest) >= 2:
+        c1, c2 = rest[0], rest[1]
+# Try (unit, ref) order
+        if _is_unit_token(c1) and _is_ref_range_token(c2):
+            unit = c1
+            ref_range = c2
+# Try (ref, unit) order
+        elif _is_ref_range_token(c1) and _is_unit_token(c2):
+            ref_range = c1
+            unit = c2
+# Try (unit, unknown) — ref might span multiple tokens
+        elif _is_unit_token(c1):
+            unit = c1
+            ref_rest = rest[1:]
+            ref_tokens = [t for t in ref_rest if _is_ref_range_token(t) or _extract_numeric(t) is not None]
+            if ref_tokens:
+                ref_range = _normalize_ref_range(" ".join(ref_tokens))
+# Try (ref, unknown) — unit might be further right
+        elif _is_ref_range_token(c1):
+            ref_range = c1
+            unit_rest = rest[1:]
+            for t in unit_rest:
+                if _is_unit_token(t):
+                    unit = t
+                    break
+        else:
+            return None
+
+    if ref_range:
+        ref_range = _normalize_ref_range(ref_range)
+
+    test_key = _lookup_test(name)
+
+    return {
+        "test_name": name,
+        "value": value,
+        "qualitative_value": "",
+        "unit": unit,
+        "reference_range": ref_range,
+        "test_key": test_key,
+    }
+
+
+# 8.  Entry Point
 
 def parse_lab_report(text: str) -> list[dict]:
-    """
-    Extract lab results from OCR/text.
-    Uses two-stage parsing:
-      1. Regex patterns (for well-structured formats)
-      2. Fallback to first-number extraction (for multi-column/complex formats)
-    
-    Returns list of dicts: {test_name, value, unit, reference_range}
-    """
+    """Extract lab results from OCR text."""
     raw = (text or "").strip()
     if not raw:
         return []
@@ -368,7 +821,6 @@ def parse_lab_report(text: str) -> list[dict]:
     logger.info("[parser] starting extraction on %d chars", len(raw))
     logger.debug("[parser] raw OCR input:\n%s", raw)
 
-    # Apply global OCR corrections first
     cleaned_text = repair_ocr_text(raw)
     logger.debug("[parser] cleaned text:\n%s", cleaned_text)
 
@@ -376,97 +828,142 @@ def parse_lab_report(text: str) -> list[dict]:
 
     for raw_line in cleaned_text.splitlines():
         line = _clean_line(raw_line)
-        multi_column_line = _clean_multicolumn_line(raw_line)
         if not line or len(line) < 3:
+            logger.debug("[parser] REJECT too short: %r", raw_line)
             continue
-        
-        # Skip pure column-header rows, but do not skip any line with numeric output.
-        if _SKIP_RE.match(line):
-            logger.debug("[parser] skip header line: %r", line)
+
+# Stage 1: Reject Metadata / Headers
+# URL / email / phone
+        if _URL_RE.search(line):
+            logger.debug("[parser] REJECT contains URL: %r", line)
             continue
-        
-        # Skip hard metadata lines that can never be test values
+        if _EMAIL_RE.search(line):
+            logger.debug("[parser] REJECT contains email: %r", line)
+            continue
+# Phone detection — use strict pattern to avoid matching lab values
+        if _PHONE_RE.search(line):
+            logger.debug("[parser] REJECT contains phone: %r", line)
+            continue
+
+# Section / column headers
+        if _HEADER_RE.match(line):
+            logger.debug("[parser] REJECT section header: %r", line)
+            continue
+
+# Metadata keywords
         if _META_RE.search(line):
-            logger.debug("[parser] skip metadata line: %r", line)
-            continue
-        
-        # Skip garbage lines (mostly OCR noise)
-        if _is_garbage_line(line):
-            logger.debug("[parser] skip garbage line: %r", line)
+            logger.debug("[parser] REJECT metadata keyword: %r", line)
             continue
 
-        matched = False
-        
-        # STAGE 1: Try structured regex patterns (colon/equals format)
-        for pat in _PATTERNS:
-            m = pat.match(line)
-            if not m:
+# Date-only lines
+        if _DATE_LINE_RE.match(line) or _DATE_MONTH_RE.match(line) or _DATE_MONTH2_RE.match(line):
+            logger.debug("[parser] REJECT date only: %r", line)
+            continue
+
+# Lines without any alphabetic character
+        if not re.search(r"[A-Za-z]", line):
+            logger.debug("[parser] REJECT no alphabetic chars: %r", line)
+            continue
+
+# Lines without any numeric or qualitative value potential
+        if not re.search(r"\d", line) and not re.search(
+            r"(negative|positive|normal|abnormal|reactive|nil|trace|detected|present|absent)",
+            line, re.I,
+        ):
+            logger.debug("[parser] REJECT no value possible: %r", line)
+            continue
+
+        logger.debug("[parser] ACCEPT line: %r", line)
+
+# Stage 2: Multi-column parsing
+        if "  " in line:
+            mc_tokens = [t.strip() for t in re.split(r"\s{2,}", line) if t.strip()]
+            if len(mc_tokens) >= 3:
+                parsed = _parse_multicolumn(mc_tokens)
+                if parsed and parsed["test_name"] and (parsed["value"] is not None or parsed["qualitative_value"]):
+                    logger.info(
+                        "[parser] multicolumn match: %r -> name=%r value=%s unit=%r ref=%r",
+                        line, parsed["test_name"], parsed["value"],
+                        parsed["unit"], parsed["reference_range"],
+                    )
+                    results.append({
+                        "test_name": parsed["test_name"],
+                        "value": parsed["value"] if parsed["value"] is not None else 0.0,
+                        "unit": parsed["unit"] or "",
+                        "raw_unit": parsed["unit"],
+                        "reference_range": parsed["reference_range"],
+                    })
+                    continue
+
+# Stage 3: Single-space token parsing
+        tokens = line.split()
+# Allow 2-token lines (e.g. "TSH 2.5" or "HB 13") — value-only results
+        if len(tokens) < 2:
+            logger.debug("[parser] REJECT too few tokens: %r", line)
+            continue
+
+        parsed = _backward_token_parse(tokens)
+        if parsed is None:
+            logger.debug("[parser] REJECT backward parse failed: %r", line)
+            continue
+
+        name = parsed["test_name"]
+        value = parsed["value"]
+        qual = parsed["qualitative_value"]
+        unit = parsed["unit"]
+        ref = parsed["reference_range"]
+        test_key = parsed["test_key"]
+
+# Stage 4: Validate
+        if not name or len(name) < 2:
+            logger.debug("[parser] REJECT invalid name: %r (line=%r)", name, line)
+            continue
+
+        if value is None and not qual:
+            logger.debug("[parser] REJECT no value: name=%r line=%r", name, line)
+            continue
+
+# Reject suspicious test names (metadata that slipped through)
+        alpha_count = sum(1 for c in name if c.isalpha())
+        if alpha_count < 3:
+            logger.debug("[parser] REJECT name insufficient alpha: %r (line=%r)", name, line)
+            continue
+
+# Use only clearly non-medical terms that would never appear as a test name
+        suspicious = [
+            r"\bphone\b", r"\bmobile\b", r"\bcontact\b", r"\bemail\b",
+            r"\bwebsite\b", r"\bfax\b", r"\baddress\b",
+            r"\bbarcode\b", r"\bdoctor\b", r"\bconsultant\b",
+            r"\bremarks\b", r"\bsignature\b",
+            r"\+91",
+        ]
+        if any(re.search(p, name, re.I) for p in suspicious):
+            logger.debug("[parser] REJECT suspicious name: %r (line=%r)", name, line)
+            continue
+
+# Discard unresolvable names (not in dictionary) unless they look plausible
+        if not test_key:
+# Name must be at least 4 alpha chars and not look like noise
+            if name.isupper() and len(set(name)) <= 3:
+                logger.debug("[parser] REJECT likely abbreviation/header: %r (line=%r)", name, line)
+                continue
+# Check for non-medical-looking names
+            if not re.search(r"[A-Za-z]{3,}", name):
+                logger.debug("[parser] REJECT name too short alpha: %r (line=%r)", name, line)
                 continue
 
-            name = (m.group("name") or "").strip().rstrip(":=-")
-            name = re.sub(r"\s+", " ", name).strip()
-            if len(name) < 2:
-                continue
+        logger.info(
+            "[parser] match: %r -> name=%r value=%s unit=%r ref=%r",
+            line, name, value, unit, ref,
+        )
 
-            try:
-                value_str = m.group("value")
-                value = _parse_value(value_str)
-            except Exception as e:
-                logger.debug("[parser] failed value parse for %r: %s", line, e)
-                continue
-
-            raw_unit = (m.group("unit") or "").strip()
-            if raw_unit and not _is_valid_unit(raw_unit):
-                logger.debug("[parser] clearing invalid unit noise: %r", raw_unit)
-                raw_unit = ""
-
-            unit = normalize_unit(raw_unit) or raw_unit
-            ref = (m.group("ref") or "").strip()
-
-            logger.info("[parser] pattern match: %r -> name=%r value=%s unit=%r ref=%r", line, name, value, unit, ref)
-
-            results.append({
-                "test_name": name,
-                "value": value,
-                "unit": unit,
-                "raw_unit": raw_unit,
-                "reference_range": ref,
-            })
-            matched = True
-            break
-
-        if matched:
-            continue
-
-        # STAGE 2: Try multi-column extraction for structured lines
-        multicol = _parse_multicolumn_line(multi_column_line)
-        if multicol is not None:
-            results.append(multicol)
-            continue
-
-        # STAGE 3: Fallback to first-number extraction (for unstructured lines)
-        extraction = _extract_first_value(line)
-        if extraction:
-            name, value, rest = extraction
-            
-            # Extract unit and reference range from what's left
-            raw_unit, ref = _extract_unit_and_ref(rest)
-            
-            if raw_unit and not _is_valid_unit(raw_unit):
-                logger.debug("[parser] clearing invalid unit noise: %r", raw_unit)
-                raw_unit = ""
-            
-            unit = normalize_unit(raw_unit) or raw_unit
-            
-            logger.info("[parser] fallback match: %r -> name=%r value=%s unit=%r ref=%r", line, name, value, unit, ref)
-            
-            results.append({
-                "test_name": name,
-                "value": value,
-                "unit": unit,
-                "raw_unit": raw_unit,
-                "reference_range": ref,
-            })
+        results.append({
+            "test_name": name,
+            "value": value if value is not None else 0.0,
+            "unit": unit or "",
+            "raw_unit": unit,
+            "reference_range": ref,
+        })
 
     logger.info("[parser] extraction complete: %d results found", len(results))
     return results

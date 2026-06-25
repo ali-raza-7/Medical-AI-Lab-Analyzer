@@ -1,0 +1,167 @@
+[
+  {
+    "name": "Iron Deficiency Anemia",
+    "pattern_id": "anemia_iron_deficiency",
+    "test_dependencies": ["hemoglobin", "hematocrit", "mcv", "mch"],
+    "keywords": ["iron deficiency", "microcytic anemia", "hypochromic", "low iron"],
+    "description": "Low Hb + Low MCV + Low MCHC/MCH — classic sign of microcytic hypochromic anemia",
+    "severity": "MODERATE",
+    "causes": ["Iron deficiency", "Chronic blood loss", "Poor dietary intake"],
+    "next_steps": ["Iron panel (ferritin, serum iron, TIBC)", "Hemoglobin recheck", "Dietary assessment"],
+    "category": "CBC"
+  },
+  {
+    "name": "Vitamin B12/Folate Deficiency Anemia",
+    "pattern_id": "anemia_vitamin_b12",
+    "test_dependencies": ["hemoglobin", "mcv", "rbc"],
+    "keywords": ["B12 deficiency", "folate deficiency", "macrocytic anemia", "megaloblastic"],
+    "description": "Low Hb + High MCV (large red cells) — suggests macrocytic anemia",
+    "severity": "MODERATE",
+    "causes": ["Vitamin B12 deficiency", "Folate deficiency", "Pernicious anemia"],
+    "next_steps": ["B12 level", "Folate level", "Parietal cell antibody test"],
+    "category": "CBC"
+  },
+  {
+    "name": "Bacterial Infection",
+    "pattern_id": "infection_bacterial",
+    "test_dependencies": ["wbc", "neutrophils_pct", "crp"],
+    "keywords": ["bacterial infection", "elevated WBC", "left shift", "neutrophilia"],
+    "description": "Elevated WBC + High neutrophils + High CRP — suggests active infection",
+    "severity": "MODERATE",
+    "causes": ["Bacterial infection", "Pneumonia", "Urinary tract infection"],
+    "next_steps": ["Blood cultures", "Imaging if indicated", "Antibiotic consideration"],
+    "category": "CBC"
+  },
+  {
+    "name": "Viral Infection",
+    "pattern_id": "infection_viral",
+    "test_dependencies": ["wbc", "lymphocytes_pct"],
+    "keywords": ["viral infection", "lymphocytosis", "low neutrophils"],
+    "description": "Normal/Low WBC + High lymphocytes — suggests viral infection",
+    "severity": "MILD",
+    "causes": ["Viral infection", "Acute viral syndrome"],
+    "next_steps": ["Supportive care", "Repeat labs if symptoms persist"],
+    "category": "CBC"
+  },
+  {
+    "name": "Iron Overload",
+    "pattern_id": "iron_overload",
+    "test_dependencies": ["iron", "ferritin", "tibc"],
+    "keywords": ["hemochromatosis", "iron overload", "high ferritin", "saturation"],
+    "description": "Elevated Iron + High Ferritin + Low TIBC — suggests iron overload",
+    "severity": "MODERATE",
+    "causes": ["Hemochromatosis", "Multiple transfusions", "Iron supplementation"],
+    "next_steps": ["Transferrin saturation", "Genetic testing for HFE", "Iron chelation therapy"],
+    "category": "Iron"
+  },
+  {
+    "name": "Elevated LDL Cholesterol",
+    "pattern_id": "dyslipidemia_high_ldl",
+    "test_dependencies": ["ldl", "total_cholesterol"],
+    "keywords": ["high LDL", "cardiovascular risk", "atherosclerosis risk"],
+    "description": "High LDL + High total cholesterol — cardiovascular risk factor",
+    "severity": "MODERATE",
+    "causes": ["Genetic predisposition", "Poor diet", "Sedentary lifestyle"],
+    "next_steps": ["Diet modification", "Statin therapy consideration", "Exercise"],
+    "category": "Lipids"
+  },
+  {
+    "name": "Low HDL Cholesterol",
+    "pattern_id": "dyslipidemia_low_hdl",
+    "test_dependencies": ["hdl"],
+    "keywords": ["low HDL", "protective factor low", "cardiovascular risk"],
+    "description": "Low HDL — lack of protective cholesterol",
+    "severity": "MODERATE",
+    "causes": ["Sedentary lifestyle", "Smoking", "Metabolic syndrome"],
+    "next_steps": ["Increase physical activity", "Smoking cessation", "Diet modification"],
+    "category": "Lipids"
+  },
+  {
+    "name": "Hypothyroidism",
+    "pattern_id": "thyroid_hypothyroidism",
+    "test_dependencies": ["tsh"],
+    "keywords": ["high TSH", "hypothyroidism", "low thyroid function"],
+    "description": "High TSH — suggests primary hypothyroidism",
+    "severity": "MODERATE",
+    "causes": ["Hashimoto's thyroiditis", "Iodine deficiency", "Post-thyroidectomy"],
+    "next_steps": ["Free T4 level", "TPO antibodies", "Levothyroxine initiation"],
+    "category": "Thyroid"
+  },
+  {
+    "name": "Hyperthyroidism",
+    "pattern_id": "thyroid_hyperthyroidism",
+    "test_dependencies": ["tsh", "t3", "t4"],
+    "keywords": ["low TSH", "hyperthyroidism", "high thyroid function"],
+    "description": "Low TSH + High T3/T4 — suggests primary hyperthyroidism",
+    "severity": "MODERATE",
+    "causes": ["Graves disease", "Thyroiditis", "Toxic multinodular goiter"],
+    "next_steps": ["TSI/TRAb antibodies", "Thyroid ultrasound", "Endocrinology referral"],
+    "category": "Thyroid"
+  },
+  {
+    "name": "Renal Dysfunction",
+    "pattern_id": "kidney_dysfunction",
+    "test_dependencies": ["creatinine", "urea"],
+    "keywords": ["renal function", "kidney disease", "elevated creatinine"],
+    "description": "Elevated Creatinine + Elevated Urea — suggests reduced kidney function",
+    "severity": "MODERATE",
+    "causes": ["Chronic kidney disease", "Acute kidney injury", "Dehydration"],
+    "next_steps": ["Estimated GFR", "Urinalysis", "Renal imaging if indicated"],
+    "category": "Kidney"
+  },
+  {
+    "name": "Hepatitis/Liver Inflammation",
+    "pattern_id": "liver_hepatitis",
+    "test_dependencies": ["alt", "ast", "bilirubin"],
+    "keywords": ["elevated transaminases", "hepatitis", "liver inflammation"],
+    "description": "Elevated ALT/AST + High Bilirubin — suggests hepatocellular injury",
+    "severity": "MODERATE",
+    "causes": ["Viral hepatitis", "Alcoholic liver disease", "Autoimmune hepatitis"],
+    "next_steps": ["Viral hepatitis serologies", "Liver function panel", "Hepatology referral"],
+    "category": "Liver"
+  },
+  {
+    "name": "Cirrhosis/Advanced Liver Disease",
+    "pattern_id": "liver_cirrhosis",
+    "test_dependencies": ["alt", "ast", "albumin", "bilirubin"],
+    "keywords": ["cirrhosis", "advanced liver disease", "low albumin", "coagulopathy"],
+    "description": "Elevated ALT/AST + Low Albumin + High Bilirubin — suggests cirrhosis",
+    "severity": "SEVERE",
+    "causes": ["Alcoholic cirrhosis", "Viral hepatitis C", "Nonalcoholic fatty liver disease"],
+    "next_steps": ["Liver ultrasound with Doppler", "Platelet count", "INR/PT", "Hepatology referral"],
+    "category": "Liver"
+  },
+  {
+    "name": "Low Sodium (Hyponatremia)",
+    "pattern_id": "electrolyte_hyponatremia",
+    "test_dependencies": ["sodium"],
+    "keywords": ["low sodium", "hyponatremia", "hypo-osmolarity"],
+    "description": "Low Sodium — altered fluid/electrolyte balance",
+    "severity": "MODERATE",
+    "causes": ["SIADH", "Dehydration", "Liver/kidney disease"],
+    "next_steps": ["Osmolality check", "Urine sodium", "Fluid restriction or hypertonic saline"],
+    "category": "Metabolic"
+  },
+  {
+    "name": "High Potassium (Hyperkalemia)",
+    "pattern_id": "electrolyte_hyperkalemia",
+    "test_dependencies": ["potassium"],
+    "keywords": ["high potassium", "hyperkalemia", "cardiac risk"],
+    "description": "High Potassium — can cause cardiac arrhythmias",
+    "severity": "SEVERE",
+    "causes": ["Renal failure", "Hemolysis in sample", "Rhabdomyolysis"],
+    "next_steps": ["ECG", "Repeat K+ (rule out hemolysis)", "Calcium/glucose/insulin if critical"],
+    "category": "Metabolic"
+  },
+  {
+    "name": "Poorly Controlled Diabetes",
+    "pattern_id": "diabetes_poorly_controlled",
+    "test_dependencies": ["glucose_fasting", "hba1c"],
+    "keywords": ["high glucose", "high HbA1c", "diabetes", "hyperglycemia"],
+    "description": "High fasting glucose + High HbA1c — indicates poor glycemic control",
+    "severity": "MODERATE",
+    "causes": ["Type 2 diabetes", "Inadequate medication", "Poor compliance"],
+    "next_steps": ["Intensify medications", "Dietary counseling", "Endocrinology referral"],
+    "category": "Metabolic"
+  }
+]

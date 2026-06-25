@@ -44,7 +44,7 @@ def _status_for(line: str, gender: str = "male", age_group: str = "adult") -> st
     return classify_numeric(val, rr.low, rr.high)
 
 
-# ── CBC unit conversion tests ────────────────────────────────────────────────
+# CBC unit conversion tests
 
 def test_x10_3_units_normal():
     assert _status_for("WBC Count 7.5 x10^3/µL (4.0-11.0)") == "normal"
@@ -60,16 +60,12 @@ def test_simple_units():
     assert _status_for("Creatinine 1.6 mg/dL (0.7-1.3)") == "high"
 
 
-# ── Gender-specific tests ────────────────────────────────────────────────────
-
 def test_hemoglobin_gender():
-    # 9.5 g/dL is low for both male and female
+# 9.5 g/dL is low for both male and female
     assert _status_for("Hemoglobin 9.5 g/dL", gender="male") == "low"
-    # 13.5 g/dL is normal for female (12.0–15.5) but could be low for male (13.5–17.5 → edge)
+# 13.5 g/dL is normal for female (12.0–15.5) but could be low for male (13.5–17.5 → edge)
     assert _status_for("Hemoglobin 13.5 g/dL", gender="female") == "normal"
 
-
-# ── Thyroid tests ────────────────────────────────────────────────────────────
 
 def test_tsh_high():
     assert _status_for("TSH 8.5 mIU/L") == "high"
@@ -101,19 +97,14 @@ def test_parse_rdw_cv_decimal_fragment():
 def test_hba1c_ignores_ocr_unit():
     assert _status_for("HbA1c 9.2 g/dL") == "high"
 
-# ── Vitamin tests ────────────────────────────────────────────────────────────
 
 def test_vitamin_d_low():
     assert _status_for("Vitamin D 15 ng/mL") == "low"
 
 
-# ── Diabetes ─────────────────────────────────────────────────────────────────
-
 def test_hba1c_high():
     assert _status_for("HbA1c 7.2 %") == "high"
 
-
-# ── Platelet low / WBC high ──────────────────────────────────────────────────
 
 def test_platelet_low():
     assert _status_for("Platelet Count 98 x10^3/µL") == "low"
