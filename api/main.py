@@ -39,7 +39,7 @@ from core.tasks import perform_analysis
 from core.celery_app import celery_app
 from celery.result import AsyncResult
 
-from core.database import get_db
+from core.database import get_db, engine, Base
 from core.models import User, Analysis, RefreshToken
 from core.redis_client import get_redis
 from core.email import send_verification_email, send_password_reset_email
@@ -260,7 +260,14 @@ def _check_redis_reachable() -> bool:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("[startup] initializing database and RAG system...")
+    logger.info("[startup] initializing database tables...")
+    try:
+        Base.metadata.create_all(bind=engine)
+        logger.info("[startup] database tables ready")
+    except Exception as exc:
+        logger.warning("[startup] could not create tables: %s", exc)
+
+    logger.info("[startup] initializing RAG system...")
     try:
         rag_ok = initialize_rag_system()
         if rag_ok:
