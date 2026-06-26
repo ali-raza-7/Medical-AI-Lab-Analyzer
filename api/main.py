@@ -370,15 +370,8 @@ async def _poll_task_result(task, timeout: int = 300, poll_interval: float = 0.5
 
 
 @app.get("/health")
-@limiter.limit("5/minute")
-async def health(request: Request, db: Session = Depends(get_db)):
-    try:
-        from sqlalchemy import text as sa_text
-        db.execute(sa_text("SELECT 1"))
-        return {"status": "healthy", "database": "connected", "timestamp": datetime.utcnow().isoformat()}
-    except Exception as exc:
-        logger.error("health check failed", error=str(exc))
-        raise HTTPException(status_code=503, detail="Database connection failed")
+async def health():
+    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
 
 @app.post("/signup")
