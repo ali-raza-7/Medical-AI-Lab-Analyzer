@@ -1,4 +1,26 @@
-# Medical AI Lab Analyzer
+## Table of Contents
+
+1. [Project Overview](#1-project-overview)
+   - [Why It Was Built](#why-it-was-built)
+   - [Key Features](#key-features)
+2. [Target Audience](#2-target-audience)
+3. [Technology Stack](#3-technology-stack)
+4. [Tools Used](#4-tools-used)
+5. [Project Structure](#5-project-structure)
+6. [Local Setup (Step by Step)](#6-local-setup-step-by-step)
+   - [Prerequisites](#prerequisites)
+   - [Step 1 — Clone the Repository](#step-1----clone-the-repository)
+   - [Step 2 — Environment Setup](#step-2----environment-setup)
+   - [Step 3 — Start the Backend (Docker)](#step-3----start-the-backend-docker)
+   - [Step 4 — Database Migrations](#step-4----database-migrations-first-time-only)
+   - [Step 5 — Start the Frontend](#step-5----start-the-frontend)
+   - [Step 6 — Open the Application](#step-6----open-the-application)
+7. [Troubleshooting](#7-troubleshooting)
+8. [Features in Detail](#8-features-in-detail)
+
+
+
+## Medical AI Lab Analyzer
 
 **Medical AI Lab Analyzer** — A full-stack RAG-powered web app that lets users upload lab reports (image/PDF), extracts data via OCR, matches test names using FAISS semantic search, retrieves clinical context from a medical knowledge base, and generates plain-English AI explanations for abnormal values.
 
@@ -291,3 +313,7 @@ docker compose restart celery
 - **Security** -- CSRF middleware, Content-Security-Policy headers, HSTS, rate limiting (slowapi), password strength validation
 - **Responsive UI** -- Tailwind CSS dark/light theme, loading skeletons, error boundaries, keyboard accessibility
 - **Dockerized deployment** -- Four containers (API, Celery, PostgreSQL, Redis) orchestrated via docker-compose with health checks and resource limits
+
+# 🩺 Medical AI Lab Analyzer
+
+![Project Screenshot](image/image.png)
