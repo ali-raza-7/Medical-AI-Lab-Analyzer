@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 
 # Startup validation: at least one LLM API key must be configured
 if not os.getenv("GROQ_API_KEY") and not os.getenv("GEMINI_API_KEY"):
-    raise RuntimeError(
-        "No LLM API key configured. Set GROQ_API_KEY or GEMINI_API_KEY in .env"
+    logging.warning(
+        "No LLM API key configured — LLM explanation features disabled. Set GROQ_API_KEY or GEMINI_API_KEY in env."
     )
 
 # EXPLANATION CACHE

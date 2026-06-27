@@ -5,8 +5,8 @@ import logging
 import structlog
 
 if not os.getenv("GROQ_API_KEY") and not os.getenv("GEMINI_API_KEY"):
-    raise RuntimeError(
-        "No LLM API key configured. Set GROQ_API_KEY or GEMINI_API_KEY in .env"
+    logging.warning(
+        "No LLM API key configured — LLM features disabled. Set GROQ_API_KEY or GEMINI_API_KEY in env."
     )
 structlog.configure(
     processors=[
