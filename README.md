@@ -314,6 +314,6 @@ docker compose restart celery
 - **Responsive UI** -- Tailwind CSS dark/light theme, loading skeletons, error boundaries, keyboard accessibility
 - **Dockerized deployment** -- Four containers (API, Celery, PostgreSQL, Redis) orchestrated via docker-compose with health checks and resource limits
 
-# 🩺 Medical AI Lab Analyzer
+## Medical AI Lab Analyzer
 
 ![Project Screenshot](image/image.png)
